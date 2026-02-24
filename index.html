@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luscii Matrix &mdash; Self-Assessment</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <main>
+
+        <!-- ===== SCREEN: LANDING ===== -->
+        <section id="screen-landing" class="screen active">
+            <div class="screen-content centered">
+                <h1 class="app-title">Luscii Matrix</h1>
+                <p class="app-subtitle">Personal Self-Assessment</p>
+                <p class="app-tagline">Matrix Reloaded is about the type of problems you solve, not about rank.</p>
+
+                <!-- First visit state -->
+                <div id="landing-first-visit">
+                    <button class="btn btn-primary" onclick="goToProfile()">Start Assessment</button>
+                    <div style="margin-top: 16px;">
+                        <button class="btn btn-secondary" onclick="goToJournal()">Evidence Journal</button>
+                    </div>
+                </div>
+
+                <!-- Returning visit state -->
+                <div id="landing-returning" class="hidden">
+                    <div class="last-assessment-card">
+                        <p class="last-assessment-header">
+                            Last assessment: <span id="last-assessment-date"></span>
+                        </p>
+                        <p class="last-assessment-profile">
+                            <span id="last-assessment-profile"></span> &mdash; <span id="last-assessment-level"></span>
+                        </p>
+                        <div id="last-assessment-bars" class="score-bars"></div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="goToProfile()">New Assessment</button>
+                        <button class="btn btn-secondary" onclick="goToHistory()">View History</button>
+                        <button class="btn btn-secondary" onclick="goToJournal()">Evidence Journal</button>
+                    </div>
+                </div>
+
+                <!-- Resume in-progress -->
+                <div id="landing-resume" class="hidden">
+                    <div class="resume-card">
+                        <p>You have an assessment in progress.</p>
+                        <p id="resume-profile-info"></p>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="resumeAssessment()">Resume Assessment</button>
+                        <button class="btn btn-secondary" onclick="discardAndStart()">Start Fresh</button>
+                        <button class="btn btn-secondary" onclick="goToJournal()">Evidence Journal</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SCREEN: PROFILE SELECTION ===== -->
+        <section id="screen-profile" class="screen">
+            <div class="screen-content">
+                <div class="step-header">
+                    <button class="btn-back" onclick="goToLanding()" aria-label="Go back">&larr;</button>
+                    <span class="step-indicator">Step 1 of 3 &mdash; Select Your Profile</span>
+                </div>
+                <p class="step-description">Which type of problems do you mostly solve?</p>
+
+                <div class="problem-type-labels">
+                    <div class="problem-type-label">
+                        <strong>Concrete problems</strong>
+                        <span>Solution exists &mdash; find &amp; apply it</span>
+                    </div>
+                    <div class="problem-type-label">
+                        <strong>Abstract problems</strong>
+                        <span>Solution must be created</span>
+                    </div>
+                </div>
+
+                <div id="profile-cards" class="profile-grid"></div>
+
+                <!-- Expanded profile detail -->
+                <div id="profile-detail" class="profile-detail hidden">
+                    <div class="profile-detail-content">
+                        <div class="profile-detail-header">
+                            <span id="detail-icon" class="profile-icon-large"></span>
+                            <h2 id="detail-name"></h2>
+                            <span id="detail-name-dutch" class="dutch-name"></span>
+                        </div>
+                        <dl class="profile-detail-info">
+                            <dt>Core contribution</dt>
+                            <dd id="detail-contribution"></dd>
+                            <dt>Problem type</dt>
+                            <dd id="detail-problem-type"></dd>
+                            <dt>Characteristics</dt>
+                            <dd id="detail-characteristics"></dd>
+                            <dt>Added value</dt>
+                            <dd id="detail-added-value"></dd>
+                        </dl>
+                        <div class="profile-detail-actions">
+                            <button class="btn btn-primary" id="btn-select-profile">Select this profile</button>
+                            <button class="btn btn-secondary" onclick="closeProfileDetail()">Back to overview</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SCREEN: LEVEL SELECTION ===== -->
+        <section id="screen-level" class="screen">
+            <div class="screen-content">
+                <div class="step-header">
+                    <button class="btn-back" onclick="goToProfile()" aria-label="Go back">&larr;</button>
+                    <span class="step-indicator">Step 2 of 3 &mdash; Your Growth Level</span>
+                </div>
+                <p class="step-description">
+                    Profile: <strong id="level-profile-name"></strong>
+                </p>
+                <p>Where are you on the learning pathway?</p>
+
+                <fieldset id="level-options" class="level-fieldset">
+                    <legend class="sr-only">Select your growth level</legend>
+                </fieldset>
+
+                <button class="btn btn-primary" id="btn-continue-assessment" onclick="startAssessment()" disabled>
+                    Continue to Assessment
+                </button>
+            </div>
+        </section>
+
+        <!-- ===== SCREEN: ASSESSMENT ===== -->
+        <section id="screen-assessment" class="screen">
+            <div class="screen-content">
+                <div class="step-header">
+                    <button class="btn-back" id="btn-assessment-back" aria-label="Go back">&larr;</button>
+                    <span class="step-indicator">Step 3 of 3 &mdash; Self-Assessment</span>
+                </div>
+                <p class="assessment-context" id="assessment-context"></p>
+
+                <!-- Dimension progress dots -->
+                <div class="dimension-progress" id="dimension-progress"></div>
+
+                <!-- Dimension header -->
+                <div class="dimension-header" id="dimension-header">
+                    <h2 id="dimension-name"></h2>
+                    <p id="dimension-description" class="dimension-desc"></p>
+                </div>
+
+                <!-- Statement ratings -->
+                <div id="statements-container" class="statements-container"></div>
+
+                <!-- Notes -->
+                <div class="notes-section">
+                    <button class="btn-text" id="btn-toggle-notes" onclick="toggleNotes()">
+                        Add notes (optional)
+                    </button>
+                    <textarea
+                        id="dimension-notes"
+                        class="notes-textarea hidden"
+                        placeholder="Your reflections on this dimension..."
+                        rows="3"
+                    ></textarea>
+                </div>
+
+                <!-- Navigation -->
+                <div class="assessment-nav">
+                    <button class="btn btn-primary" id="btn-next-dimension" onclick="nextDimension()">
+                        Next &rarr;
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SCREEN: RESULTS ===== -->
+        <section id="screen-results" class="screen">
+            <div class="screen-content">
+                <div class="step-header">
+                    <span class="step-indicator">Your Assessment Results</span>
+                </div>
+                <p class="results-context" id="results-context"></p>
+
+                <!-- Radar Chart -->
+                <div class="chart-container">
+                    <canvas id="results-chart" width="400" height="400"></canvas>
+                </div>
+
+                <!-- Score summary -->
+                <div id="score-summary" class="score-summary"></div>
+
+                <!-- Narrative -->
+                <div id="narrative-section" class="narrative-section"></div>
+
+                <!-- Growth suggestions -->
+                <div id="growth-section" class="growth-section"></div>
+
+                <!-- Actions -->
+                <div class="results-actions">
+                    <button class="btn btn-primary" onclick="saveAndFinish()">Save &amp; Done</button>
+                    <button class="btn btn-secondary hidden" id="btn-compare" onclick="goToCompare()">
+                        Compare with Previous
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SCREEN: HISTORY ===== -->
+        <section id="screen-history" class="screen">
+            <div class="screen-content">
+                <div class="step-header">
+                    <button class="btn-back" onclick="goToLanding()" aria-label="Go back">&larr;</button>
+                    <span class="step-indicator">Assessment History</span>
+                </div>
+
+                <div id="history-empty" class="hidden">
+                    <p>No assessments yet. Complete your first assessment to start tracking progress.</p>
+                    <button class="btn btn-primary" onclick="goToProfile()">Start Assessment</button>
+                </div>
+
+                <div id="history-list" class="history-list"></div>
+
+                <div id="comparison-section" class="comparison-section hidden">
+                    <h3>Comparison</h3>
+                    <div class="chart-container">
+                        <canvas id="comparison-chart" width="400" height="400"></canvas>
+                    </div>
+                    <div id="comparison-deltas" class="comparison-deltas"></div>
+                    <button class="btn btn-secondary" onclick="closeComparison()">Close Comparison</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SCREEN: EVIDENCE JOURNAL ===== -->
+        <section id="screen-journal" class="screen">
+            <div class="screen-content">
+                <div class="step-header">
+                    <button class="btn-back" onclick="goToLanding()" aria-label="Go back">&larr;</button>
+                    <span class="step-indicator">Evidence Journal</span>
+                </div>
+                <p class="step-description">Collect concrete examples for your behavioral statements.</p>
+
+                <!-- Profile/level picker -->
+                <div id="journal-picker" class="journal-picker">
+                    <div class="journal-picker-row">
+                        <label for="journal-profile-select">Profile</label>
+                        <select id="journal-profile-select" onchange="onJournalProfileChange()"></select>
+                    </div>
+                    <div class="journal-picker-row">
+                        <label for="journal-level-select">Level</label>
+                        <select id="journal-level-select" onchange="onJournalLevelChange()"></select>
+                    </div>
+                </div>
+
+                <!-- Dimension accordion -->
+                <div id="journal-dimensions" class="journal-dimensions"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- LocalStorage warning -->
+    <div id="storage-warning" class="storage-warning hidden">
+        Your browser&rsquo;s private mode may not save assessments between sessions.
+    </div>
+
+    <script src="matrix-data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

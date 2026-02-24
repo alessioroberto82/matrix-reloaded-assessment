@@ -1,0 +1,8 @@
+# Luscii proprietary data
+matrix-data.js
+notion-export/
+notion-export-new/
+
+# Local config
+.claude/
+.DS_Store
