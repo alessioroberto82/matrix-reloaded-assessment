@@ -395,6 +395,85 @@ td:first-child { font-weight: 500; }
 .slide.active .d5 { animation-delay: 0.5s; }
 .slide.active .d6 { animation-delay: 0.6s; }
 
+/* ===== CHAT BUBBLES ===== */
+.chat {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 720px;
+}
+
+.chat-msg {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.chat-msg.ai { flex-direction: row-reverse; }
+
+.chat-avatar {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--bg);
+}
+
+.chat-msg.human .chat-avatar { background: var(--accent-3); }
+.chat-msg.ai .chat-avatar { background: var(--accent-2); }
+
+.chat-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.8rem 1.2rem;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    max-width: 560px;
+}
+
+.chat-msg.human .chat-bubble { border-color: rgba(52,211,153,0.25); }
+.chat-msg.ai .chat-bubble { border-color: rgba(167,139,250,0.25); }
+
+.chat-bubble .role-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.4rem;
+    display: block;
+}
+
+.chat-msg.human .role-tag { color: var(--accent-3); }
+.chat-msg.ai .role-tag { color: var(--accent-2); }
+
+.chat-bubble ul {
+    margin-top: 0.4rem;
+    gap: 0.3rem;
+}
+
+.chat-bubble li {
+    font-size: 0.82rem;
+    padding-left: 1.2em;
+}
+
+.chat-bubble li::before { font-size: 0.82rem; }
+
+.chat-context {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 0.3rem 0;
+    opacity: 0.6;
+}
+
 /* ===== NAV HINT ===== */
 .nav-hint {
     position: fixed;
@@ -430,7 +509,7 @@ td:first-child { font-weight: 500; }
     <div class="glow glow-cyan" style="top:-100px;right:10vw;"></div>
     <div class="glow glow-purple" style="bottom:-50px;left:5vw;"></div>
     <h3 class="animate d1">Case Study</h3>
-    <h1 class="animate d2">Building a Growth<br>Assessment Tool<br>in <span class="highlight">One Weekend</span></h1>
+    <h1 class="animate d2">Building a Growth<br>Assessment Tool<br>in <span class="highlight">A Few Hours</span></h1>
     <p class="subtitle animate d3">With Claude Code + BMAD-METHOD</p>
     <p class="meta animate d4">Alessio Roberto &mdash; Luscii &mdash; Feb 2026</p>
 </div>
@@ -504,7 +583,171 @@ td:first-child { font-weight: 500; }
     </p>
 </div>
 
-<!-- ==================== SLIDE 4: ARCHITECTURE ==================== -->
+<!-- ==================== SLIDE 4: DIALOGUE — SCOPE ==================== -->
+<div class="slide">
+    <div class="glow glow-cyan" style="bottom:10vh;left:5vw;"></div>
+    <h3 class="animate d1">Live dialogue &mdash; Scoping</h3>
+    <h2 class="animate d2">The right questions<br><span class="highlight">before any code</span></h2>
+    <div class="two-col" style="margin-top:1rem;">
+        <div class="chat animate d3">
+            <div class="chat-msg human">
+                <div class="chat-avatar">AR</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Human</span>
+                    I need a self-assessment tool for Luscii's Matrix Reloaded framework. It's based on the Baarda model &mdash; 8 profiles, 4 levels, 4 dimensions.
+                </div>
+            </div>
+            <div class="chat-msg ai">
+                <div class="chat-avatar">SC</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Scope Clarifier</span>
+                    Before I write requirements, I need to understand:
+                    <ul>
+                        <li>Do all profiles have all 4 growth levels?</li>
+                        <li>Is this single-user or multi-user?</li>
+                        <li>Should data leave the browser?</li>
+                        <li>Target time per assessment?</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="chat-msg human">
+                <div class="chat-avatar">AR</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Human</span>
+                    Good catch &mdash; Go-getter, Luminary, Navigator, and Chess Player skip Junior. Single user, local only. Under 10 minutes.
+                </div>
+            </div>
+        </div>
+        <div class="animate d4">
+            <div class="card" style="border-left:3px solid var(--accent);">
+                <h4 style="color:var(--accent);">What this produced</h4>
+                <p style="color:var(--text);font-size:0.9rem;margin-top:0.5rem;">
+                    <code>requirements.md</code> with 6 functional requirements, acceptance criteria, and the variable-levels constraint documented upfront.
+                </p>
+                <p style="margin-top:0.8rem;">
+                    Without this question, 4 profiles would have shown a Junior level that doesn't exist.
+                </p>
+            </div>
+            <div class="card" style="margin-top:1rem;border-left:3px solid var(--accent-2);">
+                <h4 style="color:var(--accent-2);">The pattern</h4>
+                <p style="color:var(--text);font-size:0.9rem;margin-top:0.5rem;">
+                    AI asks structured questions <em>before</em> writing anything. Edge cases surface in minutes, not after implementation.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 5: DIALOGUE — EVIDENCE JOURNAL ==================== -->
+<div class="slide">
+    <div class="glow glow-purple" style="top:10vh;right:5vw;"></div>
+    <h3 class="animate d1">Live dialogue &mdash; Feature emergence</h3>
+    <h2 class="animate d2">A feature born from<br><span class="highlight-2">real conversation</span></h2>
+    <div class="two-col" style="margin-top:1rem;">
+        <div class="chat animate d3">
+            <div class="chat-context">&mdash; Day 2, not in the original PRD &mdash;</div>
+            <div class="chat-msg human">
+                <div class="chat-avatar">AR</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Human</span>
+                    The person following my assessment strongly suggested I bring concrete examples for each question. How can I organize this?
+                </div>
+            </div>
+            <div class="chat-msg ai">
+                <div class="chat-avatar">CC</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Claude Code</span>
+                    Three options:
+                    <ul>
+                        <li>Use the existing notes field per dimension</li>
+                        <li>Add per-statement examples in-app</li>
+                        <li>Keep them in a separate Notion doc</li>
+                    </ul>
+                    Option 2 keeps evidence linked to the exact statement and shows it during assessment.
+                </div>
+            </div>
+            <div class="chat-msg human">
+                <div class="chat-avatar">AR</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Human</span>
+                    Option 2. Can you design and build it?
+                </div>
+            </div>
+            <div class="chat-context">Design &rarr; implement &rarr; QA in one pass</div>
+        </div>
+        <div class="animate d4">
+            <div class="card" style="border-left:3px solid var(--accent-2);">
+                <h4 style="color:var(--accent-2);">Evidence Journal</h4>
+                <p style="color:var(--text);font-size:0.9rem;margin-top:0.5rem;">
+                    Browse all 448 statements. Add concrete examples from your work. See them during assessment alongside each rating.
+                </p>
+            </div>
+            <div class="card" style="margin-top:1rem;border-left:3px solid var(--accent-3);">
+                <h4 style="color:var(--accent-3);">The pattern</h4>
+                <p style="color:var(--text);font-size:0.9rem;margin-top:0.5rem;">
+                    Conversation reveals the <em>real</em> need. AI offers options with trade-offs. Human decides. Full cycle (design &rarr; code &rarr; QA) in one session.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 6: DIALOGUE — QA ==================== -->
+<div class="slide">
+    <div class="glow glow-warm" style="top:5vh;left:15vw;"></div>
+    <h3 class="animate d1">Live dialogue &mdash; QA</h3>
+    <h2 class="animate d2">Role separation catches<br><span class="highlight-warm">real bugs</span></h2>
+    <div class="two-col" style="margin-top:1rem;">
+        <div class="chat animate d3">
+            <div class="chat-context">&mdash; Same AI, different role &mdash;</div>
+            <div class="chat-msg human">
+                <div class="chat-avatar">AR</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Human</span>
+                    Implementation looks done. Run QA against the requirements.
+                </div>
+            </div>
+            <div class="chat-msg ai">
+                <div class="chat-avatar">QG</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Quality Guardian</span>
+                    Verified 24 acceptance criteria. 21 pass, 2 partial, 1 deferred.
+                    <ul>
+                        <li><strong style="color:var(--red);">P1</strong> &mdash; Radar chart has no baseline. US-2.2 requires a visual reference at 3.5</li>
+                        <li><strong style="color:var(--red);">P1</strong> &mdash; Screen transitions don't move focus. Keyboard users get lost</li>
+                        <li><strong style="color:var(--warm);">P2</strong> &mdash; addedValue field exists in data but never rendered</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="chat-msg human">
+                <div class="chat-avatar">AR</div>
+                <div class="chat-bubble">
+                    <span class="role-tag">Human</span>
+                    Fix P1s now, P2s next.
+                </div>
+            </div>
+        </div>
+        <div class="animate d4">
+            <div class="card" style="border-left:3px solid var(--warm);">
+                <h4 style="color:var(--warm);">Why this works</h4>
+                <p style="color:var(--text);font-size:0.9rem;margin-top:0.5rem;">
+                    The same AI wrote the code. But switching to the QA role forces it to read the <em>requirements</em>, not defend its own implementation.
+                </p>
+                <p style="margin-top:0.8rem;">
+                    Both sessions found P1 issues. The radar baseline and focus management bugs would have shipped without this step.
+                </p>
+            </div>
+            <div class="card" style="margin-top:1rem;border-left:3px solid var(--red);">
+                <h4 style="color:var(--red);">The pattern</h4>
+                <p style="color:var(--text);font-size:0.9rem;margin-top:0.5rem;">
+                    Role separation &ne; different people. It's about forcing a different <em>perspective</em> on the same work.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 7: ARCHITECTURE ==================== -->
 <div class="slide">
     <div class="glow glow-warm" style="bottom:10vh;right:15vw;"></div>
     <h3 class="animate d1">Architecture Decisions</h3>
@@ -535,7 +778,7 @@ td:first-child { font-weight: 500; }
     </div>
 </div>
 
-<!-- ==================== SLIDE 5: SESSION 1 RESULTS ==================== -->
+<!-- ==================== SLIDE 8: SESSION 1 RESULTS ==================== -->
 <div class="slide">
     <div class="glow glow-cyan" style="top:20vh;left:5vw;"></div>
     <h3 class="animate d1">Session 1 &mdash; 23 Feb</h3>
@@ -574,44 +817,7 @@ td:first-child { font-weight: 500; }
     </div>
 </div>
 
-<!-- ==================== SLIDE 6: EVIDENCE JOURNAL ==================== -->
-<div class="slide">
-    <div class="glow glow-purple" style="bottom:5vh;left:20vw;"></div>
-    <h3 class="animate d1">Session 2 &mdash; 24 Feb</h3>
-    <h2 class="animate d2">A feature born from<br><span class="highlight-2">real conversation</span></h2>
-    <div class="two-col" style="margin-top:1rem;">
-        <div class="animate d3">
-            <p style="font-style:italic;color:var(--text-muted);margin-bottom:1rem;">
-                &ldquo;The person following my assessment strongly suggested I bring concrete examples for each question.&rdquo;
-            </p>
-            <p style="margin-bottom:1.5rem;">
-                This wasn't in the original PRD. It emerged from discussing how the assessment process actually works at Luscii.
-            </p>
-            <ul>
-                <li>Designed in 5 minutes of conversation</li>
-                <li>Implemented in one pass</li>
-                <li>QA'd immediately (23 tests, all pass)</li>
-                <li>3 issues found and fixed</li>
-            </ul>
-        </div>
-        <div class="animate d4">
-            <div class="card" style="margin-bottom:1rem;">
-                <h4 style="color:var(--accent-3);">Evidence Journal</h4>
-                <p style="color:var(--text);font-size:0.9rem;">
-                    Browse all behavioral statements. Add concrete examples from your work. See them during assessment alongside each rating.
-                </p>
-            </div>
-            <div class="card">
-                <h4 style="color:var(--accent);">Fixes from QA</h4>
-                <p><span class="badge badge-red">P1</span> Dead parameter removed</p>
-                <p style="margin-top:0.3rem;"><span class="badge badge-warm">P2</span> DOM queries &rarr; data-attributes</p>
-                <p style="margin-top:0.3rem;"><span class="badge badge-purple">P3</span> Save flash animation added</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==================== SLIDE 7: PUBLISHING ==================== -->
+<!-- ==================== SLIDE 9: PUBLISHING ==================== -->
 <div class="slide">
     <div class="glow glow-warm" style="top:5vh;right:10vw;"></div>
     <h3 class="animate d1">Publishing</h3>
@@ -643,7 +849,7 @@ td:first-child { font-weight: 500; }
     </div>
 </div>
 
-<!-- ==================== SLIDE 8: TAKEAWAYS ==================== -->
+<!-- ==================== SLIDE 10: TAKEAWAYS ==================== -->
 <div class="slide">
     <div class="glow glow-cyan" style="top:10vh;right:20vw;"></div>
     <div class="glow glow-purple" style="bottom:10vh;left:10vw;"></div>
@@ -687,7 +893,7 @@ td:first-child { font-weight: 500; }
     </div>
 </div>
 
-<!-- ==================== SLIDE 9: END ==================== -->
+<!-- ==================== SLIDE 11: END ==================== -->
 <div class="slide slide-title">
     <div class="grid-bg"></div>
     <div class="glow glow-cyan" style="top:20vh;left:20vw;width:500px;height:500px;"></div>
