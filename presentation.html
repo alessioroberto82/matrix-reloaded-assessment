@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building with Claude Code + BMAD</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface-2: #1a2235;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --accent: #22d3ee;
+    --accent-2: #a78bfa;
+    --accent-3: #34d399;
+    --warm: #fb923c;
+    --red: #f87171;
+    --border: #1e293b;
+    --font-display: 'Outfit', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+
+html { font-size: 18px; }
+
+body {
+    font-family: var(--font-display);
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* ===== SLIDE ENGINE ===== */
+.deck { position: relative; width: 100vw; height: 100vh; }
+
+.slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6vh 8vw;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    transform: translateX(40px);
+}
+
+.slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+}
+
+.slide.exit {
+    opacity: 0;
+    transform: translateX(-40px);
+}
+
+/* ===== PROGRESS BAR ===== */
+.progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.4s ease;
+    z-index: 100;
+}
+
+/* ===== SLIDE COUNTER ===== */
+.counter {
+    position: fixed;
+    bottom: 2vh;
+    right: 3vw;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    z-index: 100;
+}
+
+/* ===== TYPOGRAPHY ===== */
+h1 {
+    font-size: 3.2rem;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+}
+
+h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+}
+
+h3 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+
+p, li {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    font-weight: 300;
+    color: var(--text);
+}
+
+.highlight { color: var(--accent); }
+.highlight-2 { color: var(--accent-2); }
+.highlight-3 { color: var(--accent-3); }
+.highlight-warm { color: var(--warm); }
+.highlight-red { color: var(--red); }
+
+code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--surface-2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: var(--accent);
+}
+
+strong { font-weight: 700; color: var(--text); }
+
+/* ===== LAYOUT HELPERS ===== */
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: start;
+}
+
+.three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2rem;
+}
+
+ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+ul li {
+    padding-left: 1.5em;
+    position: relative;
+}
+
+ul li::before {
+    content: "\2192";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* ===== CARDS ===== */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.card h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+}
+
+.card p, .card li {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* ===== FLOW DIAGRAM ===== */
+.flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 2rem 0;
+}
+
+.flow-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.8rem 1.2rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    min-width: 100px;
+}
+
+.flow-step:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.flow-step .label {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text);
+    display: block;
+}
+
+.flow-step .sub {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    margin-top: 2px;
+}
+
+.flow-arrow {
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    padding: 0 0.5rem;
+    flex-shrink: 0;
+}
+
+/* ===== TABLE ===== */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 300;
+}
+
+td:first-child { font-weight: 500; }
+
+/* ===== CODE BLOCK ===== */
+.code-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.8;
+    overflow-x: auto;
+    color: var(--text-muted);
+}
+
+.code-block .comment { color: #475569; }
+.code-block .key { color: var(--accent); }
+.code-block .val { color: var(--accent-3); }
+.code-block .str { color: var(--warm); }
+
+/* ===== STAT ROW ===== */
+.stats {
+    display: flex;
+    gap: 3rem;
+    margin: 1.5rem 0;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.3rem;
+}
+
+/* ===== BADGE ===== */
+.badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
+.badge-cyan { background: rgba(34,211,238,0.15); color: var(--accent); }
+.badge-purple { background: rgba(167,139,250,0.15); color: var(--accent-2); }
+.badge-green { background: rgba(52,211,153,0.15); color: var(--accent-3); }
+.badge-red { background: rgba(248,113,113,0.15); color: var(--red); }
+.badge-warm { background: rgba(251,146,60,0.15); color: var(--warm); }
+
+/* ===== TITLE SLIDE SPECIAL ===== */
+.slide-title {
+    justify-content: flex-end;
+    padding-bottom: 12vh;
+}
+
+.slide-title h1 {
+    font-size: 4rem;
+}
+
+.slide-title .subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    font-weight: 300;
+    margin-bottom: 2rem;
+}
+
+.slide-title .meta {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+/* ===== DECORATIVE GRID BG ===== */
+.grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+}
+
+/* ===== GLOW ===== */
+.glow {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+.glow-cyan { background: var(--accent); }
+.glow-purple { background: var(--accent-2); }
+.glow-warm { background: var(--warm); }
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.slide.active .animate {
+    animation: fadeUp 0.5s ease forwards;
+    opacity: 0;
+}
+
+.slide.active .d1 { animation-delay: 0.1s; }
+.slide.active .d2 { animation-delay: 0.2s; }
+.slide.active .d3 { animation-delay: 0.3s; }
+.slide.active .d4 { animation-delay: 0.4s; }
+.slide.active .d5 { animation-delay: 0.5s; }
+.slide.active .d6 { animation-delay: 0.6s; }
+
+/* ===== NAV HINT ===== */
+.nav-hint {
+    position: fixed;
+    bottom: 2vh;
+    left: 3vw;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    opacity: 0.5;
+    z-index: 100;
+}
+
+.nav-hint kbd {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.6rem;
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="counter" id="counter"></div>
+<div class="nav-hint"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> to navigate</div>
+
+<div class="deck">
+
+<!-- ==================== SLIDE 1: TITLE ==================== -->
+<div class="slide slide-title active">
+    <div class="grid-bg"></div>
+    <div class="glow glow-cyan" style="top:-100px;right:10vw;"></div>
+    <div class="glow glow-purple" style="bottom:-50px;left:5vw;"></div>
+    <h3 class="animate d1">Case Study</h3>
+    <h1 class="animate d2">Building a Growth<br>Assessment Tool<br>in <span class="highlight">One Weekend</span></h1>
+    <p class="subtitle animate d3">With Claude Code + BMAD-METHOD</p>
+    <p class="meta animate d4">Alessio Roberto &mdash; Luscii &mdash; Feb 2026</p>
+</div>
+
+<!-- ==================== SLIDE 2: THE PROBLEM ==================== -->
+<div class="slide">
+    <div class="glow glow-purple" style="top:10vh;right:5vw;"></div>
+    <h3 class="animate d1">The Problem</h3>
+    <h2 class="animate d2">Luscii needed a way to make<br>growth <span class="highlight-2">transparent and actionable</span></h2>
+    <div class="two-col animate d3" style="margin-top:1.5rem;">
+        <div>
+            <p style="margin-bottom:1rem;">The <strong>Matrix Reloaded</strong> framework describes how people contribute at Luscii &mdash; based on the Baarda model.</p>
+            <ul>
+                <li><strong>8 profiles</strong> ordered by problem-solving complexity</li>
+                <li><strong>4 growth levels</strong> per profile (Junior &rarr; Master)</li>
+                <li><strong>4 dimensions</strong>: Mastery, Autonomy, Impact, Ownership</li>
+                <li><strong>448 behavioral statements</strong> calibrated per role</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4 style="color:var(--accent-2);">The core question</h4>
+            <p style="font-size:1rem;color:var(--text);font-style:italic;margin-top:0.5rem;">
+                &ldquo;Which type of problems do you mostly solve?&rdquo;
+            </p>
+            <p style="margin-top:1rem;">
+                The framework existed on Notion pages. No tool to actually <strong>do</strong> the self-assessment, track progress, or prepare for evaluation conversations.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 3: APPROACH ==================== -->
+<div class="slide">
+    <div class="glow glow-cyan" style="top:5vh;left:10vw;"></div>
+    <h3 class="animate d1">Approach</h3>
+    <h2 class="animate d2">BMAD-METHOD:<br><span class="highlight">structured AI workflow</span></h2>
+    <p class="animate d3" style="max-width:600px;margin-bottom:2rem;">Each phase has a distinct role, produces a specific artifact, and feeds the next step. Claude Code executes each role as a skill.</p>
+    <div class="flow animate d4">
+        <div class="flow-step" style="border-color:var(--accent);">
+            <span class="label">Scope</span>
+            <span class="sub">requirements.md</span>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:var(--accent-2);">
+            <span class="label">Prioritize</span>
+            <span class="sub">PRD.md</span>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:var(--accent-3);">
+            <span class="label">UX Design</span>
+            <span class="sub">ux-design.md</span>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:var(--warm);">
+            <span class="label">Architecture</span>
+            <span class="sub">architecture.md</span>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:var(--red);">
+            <span class="label">Implement</span>
+            <span class="sub">4 files, 0 deps</span>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:var(--accent);">
+            <span class="label">QA</span>
+            <span class="sub">test-report.md</span>
+        </div>
+    </div>
+    <p class="animate d5" style="color:var(--text-muted);font-size:0.85rem;text-align:center;margin-top:1rem;">
+        Human-in-the-loop at every checkpoint &mdash; AI proposes, human approves
+    </p>
+</div>
+
+<!-- ==================== SLIDE 4: ARCHITECTURE ==================== -->
+<div class="slide">
+    <div class="glow glow-warm" style="bottom:10vh;right:15vw;"></div>
+    <h3 class="animate d1">Architecture Decisions</h3>
+    <h2 class="animate d2">4 files. <span class="highlight-warm">Zero build step.</span></h2>
+    <div class="two-col" style="margin-top:1rem;">
+        <div class="animate d3">
+            <table>
+                <tr><th>ADR</th><th>Decision</th><th>Why</th></tr>
+                <tr><td>001</td><td>Vanilla JS</td><td>No framework overhead</td></tr>
+                <tr><td>002</td><td>Chart.js CDN</td><td>Radar chart, no bundling</td></tr>
+                <tr><td>003</td><td>localStorage</td><td>Privacy-first, no server</td></tr>
+                <tr><td>004</td><td>CSS class toggle</td><td>Screen nav without routing</td></tr>
+            </table>
+        </div>
+        <div class="animate d4">
+            <div class="code-block">
+<span class="comment">// The entire app structure</span>
+<span class="key">index.html</span>      <span class="comment">// 7 screens as &lt;section&gt;</span>
+<span class="key">style.css</span>       <span class="comment">// Responsive, 720px max</span>
+<span class="key">app.js</span>          <span class="comment">// All logic, el() helper</span>
+<span class="key">matrix-data.js</span>  <span class="comment">// Pure data, 448 statements</span>
+
+<span class="comment">// XSS prevention by design:</span>
+<span class="comment">// el() uses textContent only</span>
+<span class="comment">// zero innerHTML in the codebase</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 5: SESSION 1 RESULTS ==================== -->
+<div class="slide">
+    <div class="glow glow-cyan" style="top:20vh;left:5vw;"></div>
+    <h3 class="animate d1">Session 1 &mdash; 23 Feb</h3>
+    <h2 class="animate d2">From idea to <span class="highlight">working app</span></h2>
+    <div class="stats animate d3">
+        <div class="stat">
+            <span class="stat-value highlight">~5h</span>
+            <span class="stat-label">Total time</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value highlight-2">6</span>
+            <span class="stat-label">BMAD phases</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value highlight-3">7</span>
+            <span class="stat-label">Artifacts</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value highlight-warm">4</span>
+            <span class="stat-label">Bugs found &amp; fixed</span>
+        </div>
+    </div>
+    <div class="three-col animate d4" style="margin-top:1.5rem;">
+        <div class="card">
+            <h4><span class="badge badge-red">P1</span> Radar baseline</h4>
+            <p>Missing 3.5 "Expected" line on chart &mdash; added dashed baseline dataset</p>
+        </div>
+        <div class="card">
+            <h4><span class="badge badge-red">P1</span> Focus management</h4>
+            <p>No focus on screen change &mdash; added tabindex + focus to showScreen()</p>
+        </div>
+        <div class="card">
+            <h4><span class="badge badge-warm">P2</span> Edge cases</h4>
+            <p>Missing addedValue display + empty growth section when all scores &gt; 4.5</p>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 6: EVIDENCE JOURNAL ==================== -->
+<div class="slide">
+    <div class="glow glow-purple" style="bottom:5vh;left:20vw;"></div>
+    <h3 class="animate d1">Session 2 &mdash; 24 Feb</h3>
+    <h2 class="animate d2">A feature born from<br><span class="highlight-2">real conversation</span></h2>
+    <div class="two-col" style="margin-top:1rem;">
+        <div class="animate d3">
+            <p style="font-style:italic;color:var(--text-muted);margin-bottom:1rem;">
+                &ldquo;The person following my assessment strongly suggested I bring concrete examples for each question.&rdquo;
+            </p>
+            <p style="margin-bottom:1.5rem;">
+                This wasn't in the original PRD. It emerged from discussing how the assessment process actually works at Luscii.
+            </p>
+            <ul>
+                <li>Designed in 5 minutes of conversation</li>
+                <li>Implemented in one pass</li>
+                <li>QA'd immediately (23 tests, all pass)</li>
+                <li>3 issues found and fixed</li>
+            </ul>
+        </div>
+        <div class="animate d4">
+            <div class="card" style="margin-bottom:1rem;">
+                <h4 style="color:var(--accent-3);">Evidence Journal</h4>
+                <p style="color:var(--text);font-size:0.9rem;">
+                    Browse all behavioral statements. Add concrete examples from your work. See them during assessment alongside each rating.
+                </p>
+            </div>
+            <div class="card">
+                <h4 style="color:var(--accent);">Fixes from QA</h4>
+                <p><span class="badge badge-red">P1</span> Dead parameter removed</p>
+                <p style="margin-top:0.3rem;"><span class="badge badge-warm">P2</span> DOM queries &rarr; data-attributes</p>
+                <p style="margin-top:0.3rem;"><span class="badge badge-purple">P3</span> Save flash animation added</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 7: PUBLISHING ==================== -->
+<div class="slide">
+    <div class="glow glow-warm" style="top:5vh;right:10vw;"></div>
+    <h3 class="animate d1">Publishing</h3>
+    <h2 class="animate d2">Public code,<br><span class="highlight-warm">private data</span></h2>
+    <div class="two-col" style="margin-top:1rem;">
+        <div class="animate d3">
+            <p style="margin-bottom:1.5rem;">
+                The app code is generic. The behavioral statements are proprietary to Luscii. Solution: separate code from data.
+            </p>
+            <div class="code-block">
+<span class="comment"># .gitignore</span>
+<span class="str">matrix-data.js</span>        <span class="comment"># proprietary</span>
+<span class="str">notion-export/</span>        <span class="comment"># source material</span>
+<span class="str">notion-export-new/</span>    <span class="comment"># source material</span>
+<span class="str">.claude/</span>              <span class="comment"># local config</span>
+            </div>
+        </div>
+        <div class="animate d4">
+            <ul>
+                <li><code>matrix-data.example.js</code> published as template with full structure + placeholders</li>
+                <li>Colleagues get the real <code>matrix-data.js</code> separately</li>
+                <li>README documents the data format for anyone to adapt</li>
+                <li>Baarda model info (public knowledge) stays in the example</li>
+            </ul>
+            <div class="card" style="margin-top:1.5rem;text-align:center;">
+                <p style="font-family:var(--font-mono);font-size:0.8rem;color:var(--accent);">github.com/alessioroberto82/<br>matrix-reloaded-assessment</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 8: TAKEAWAYS ==================== -->
+<div class="slide">
+    <div class="glow glow-cyan" style="top:10vh;right:20vw;"></div>
+    <div class="glow glow-purple" style="bottom:10vh;left:10vw;"></div>
+    <h3 class="animate d1">Takeaways</h3>
+    <h2 class="animate d2">What worked</h2>
+    <div class="three-col animate d3" style="margin-top:1.5rem;">
+        <div class="card" style="border-top:3px solid var(--accent);">
+            <h4 style="color:var(--accent);">Structured phases prevent rabbit holes</h4>
+            <p>Scope Clarifier forces you to define what you're building. Architecture Owner makes tech decisions explicit. No accidental complexity.</p>
+        </div>
+        <div class="card" style="border-top:3px solid var(--accent-2);">
+            <h4 style="color:var(--accent-2);">QA as a separate role catches real bugs</h4>
+            <p>Both sessions found P1 issues that would have shipped. The role separation forces fresh eyes on the same code.</p>
+        </div>
+        <div class="card" style="border-top:3px solid var(--accent-3);">
+            <h4 style="color:var(--accent-3);">Best features come from real conversations</h4>
+            <p>Evidence Journal wasn't planned. It emerged from discussing the actual assessment process. Design &rarr; implement &rarr; QA in one flow.</p>
+        </div>
+    </div>
+    <div class="stats animate d4" style="margin-top:2rem;justify-content:center;">
+        <div class="stat" style="text-align:center;">
+            <span class="stat-value highlight">2</span>
+            <span class="stat-label">Sessions</span>
+        </div>
+        <div class="stat" style="text-align:center;">
+            <span class="stat-value highlight-2">7</span>
+            <span class="stat-label">Screens</span>
+        </div>
+        <div class="stat" style="text-align:center;">
+            <span class="stat-value highlight-3">47</span>
+            <span class="stat-label">Tests passed</span>
+        </div>
+        <div class="stat" style="text-align:center;">
+            <span class="stat-value highlight-warm">7</span>
+            <span class="stat-label">Bugs caught</span>
+        </div>
+        <div class="stat" style="text-align:center;">
+            <span class="stat-value" style="color:var(--red);">0</span>
+            <span class="stat-label">Dependencies</span>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SLIDE 9: END ==================== -->
+<div class="slide slide-title">
+    <div class="grid-bg"></div>
+    <div class="glow glow-cyan" style="top:20vh;left:20vw;width:500px;height:500px;"></div>
+    <div class="glow glow-purple" style="bottom:10vh;right:15vw;width:400px;height:400px;"></div>
+    <h3 class="animate d1">Thank you</h3>
+    <h1 class="animate d2" style="font-size:3rem;">
+        <span class="highlight">claude.ai/claude-code</span><br>
+        <span class="highlight-2" style="font-size:2rem;">github.com/bmad-method</span>
+    </h1>
+    <p class="meta animate d3" style="margin-top:1rem;">
+        Alessio Roberto &mdash; alessioroberto82 &mdash; Luscii
+    </p>
+</div>
+
+</div><!-- /deck -->
+
+<script>
+(function() {
+    var slides = document.querySelectorAll('.slide');
+    var current = 0;
+    var total = slides.length;
+    var progress = document.getElementById('progress');
+    var counter = document.getElementById('counter');
+
+    function update() {
+        slides.forEach(function(s, i) {
+            s.classList.remove('active', 'exit');
+            if (i === current) s.classList.add('active');
+        });
+        progress.style.width = ((current + 1) / total * 100) + '%';
+        counter.textContent = (current + 1) + ' / ' + total;
+    }
+
+    function next() {
+        if (current < total - 1) { current++; update(); }
+    }
+
+    function prev() {
+        if (current > 0) { current--; update(); }
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    });
+
+    // Touch support
+    var touchStartX = 0;
+    document.addEventListener('touchstart', function(e) { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', function(e) {
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); }
+    });
+
+    update();
+})();
+</script>
+</body>
+</html>

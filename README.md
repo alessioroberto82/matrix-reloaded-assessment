@@ -44,6 +44,10 @@ All data stays in the browser (localStorage). Nothing is sent to any server.
 
 This tool implements the [Matrix Reloaded](https://www.notion.so/luscii/) framework. Ask your team lead for the `matrix-data.js` file with Luscii's behavioral statements and growth suggestions.
 
+## How it was built
+
+This tool was designed and built in a single weekend using [Claude Code](https://claude.ai/claude-code) and the [BMAD-METHOD](https://github.com/bmad-method) framework. See [DEVELOPMENT.md](DEVELOPMENT.md) for the full case study.
+
 ## Credits
 
 - Framework: Matrix Reloaded by [Luscii](https://luscii.com), adapted from the [Baarda model](https://baarda.nl)
