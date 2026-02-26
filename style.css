@@ -808,6 +808,32 @@ h4 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-top: 16
     border-bottom: none;
 }
 
+.yes-comments-list {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 12px;
+}
+
+.yes-comments-list li {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.yes-comments-list li:last-child {
+    border-bottom: none;
+}
+
+.statement-comment {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 4px;
+    padding-left: 8px;
+    border-left: 2px solid var(--accent);
+}
+
 /* ===== GROWTH SUGGESTIONS ===== */
 .growth-section {
     margin-bottom: 24px;
@@ -863,6 +889,13 @@ h4 { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-top: 16
     flex-wrap: wrap;
     justify-content: center;
     margin-top: 8px;
+}
+
+.results-actions-top {
+    margin-top: 0;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
 }
 
 /* ===== HISTORY ===== */

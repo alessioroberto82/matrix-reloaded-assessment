@@ -16,6 +16,7 @@ var resultsChart = null;
 var comparisonChart = null;
 var selectedCompareIds = [];
 var selectedCompareType = null;
+var viewingFromHistory = false;
 
 // ===== DOM HELPERS =====
 function el(tag, attrs, children) {
@@ -661,14 +662,17 @@ function saveCurrentComments() {
 function goToResults() {
     var scores = calculateAllScores();
 
+    var displayDate = viewingFromHistory && currentAssessment.date
+        ? currentAssessment.date : new Date().toISOString();
+
     if (currentAssessment.type === 'culture') {
         document.getElementById('results-context').textContent =
-            'Culture Score \u2022 ' + formatDate(new Date().toISOString());
+            'Culture Score \u2022 ' + formatDate(displayDate);
     } else {
         var profile = MATRIX_DATA.profiles[currentAssessment.profileId];
         var level = MATRIX_DATA.levels[currentAssessment.levelId];
         document.getElementById('results-context').textContent =
-            profile.name + ' \u2022 ' + level.name + ' \u2022 ' + formatDate(new Date().toISOString());
+            profile.name + ' \u2022 ' + level.name + ' \u2022 ' + formatDate(displayDate);
     }
 
     renderRadarChart(scores);
@@ -676,13 +680,28 @@ function goToResults() {
     renderNarrative(scores);
     renderGrowthSuggestions(scores);
 
+    // Toggle Save vs Back button based on context (both top and bottom)
+    var saveBtns = [document.getElementById('btn-save-done'), document.getElementById('btn-save-done-top')];
+    var backBtns = [document.getElementById('btn-back-history'), document.getElementById('btn-back-history-top')];
+    for (var bi = 0; bi < saveBtns.length; bi++) {
+        if (viewingFromHistory) {
+            saveBtns[bi].classList.add('hidden');
+            backBtns[bi].classList.remove('hidden');
+        } else {
+            saveBtns[bi].classList.remove('hidden');
+            backBtns[bi].classList.add('hidden');
+        }
+    }
+
     var history = loadHistory();
     var sameTypeHistory = history.filter(function(a) { return a.type === currentAssessment.type; });
-    var compareBtn = document.getElementById('btn-compare');
-    if (sameTypeHistory.length > 0) {
-        compareBtn.classList.remove('hidden');
-    } else {
-        compareBtn.classList.add('hidden');
+    var compareBtns = [document.getElementById('btn-compare'), document.getElementById('btn-compare-top')];
+    for (var ci = 0; ci < compareBtns.length; ci++) {
+        if (sameTypeHistory.length > 0) {
+            compareBtns[ci].classList.remove('hidden');
+        } else {
+            compareBtns[ci].classList.add('hidden');
+        }
     }
 
     showScreen('screen-results');
@@ -875,9 +894,10 @@ function renderNarrative(scores) {
         var dimId = dims[d];
         var stmts = getStatementsForDimension(dimId);
         for (var s = 0; s < stmts.length; s++) {
-            var rating = currentAssessment.ratings[dimId + '_' + s];
+            var ratingKey = dimId + '_' + s;
+            var rating = currentAssessment.ratings[ratingKey];
             if (rating === 'not_yet') {
-                notYetItems.push({ dim: getDimensionName(dimId), text: stmts[s] });
+                notYetItems.push({ dim: getDimensionName(dimId), text: stmts[s], comment: currentAssessment.comments[ratingKey] || '' });
             }
         }
     }
@@ -886,10 +906,14 @@ function renderNarrative(scores) {
         container.appendChild(el('h4', { textContent: 'Statements rated "Not yet" (' + notYetItems.length + ')' }));
         var notYetList = el('ul', { className: 'not-yet-list' });
         for (var n = 0; n < notYetItems.length; n++) {
-            notYetList.appendChild(el('li', null, [
+            var notYetChildren = [
                 el('strong', { textContent: notYetItems[n].dim + ': ' }),
                 document.createTextNode(notYetItems[n].text)
-            ]));
+            ];
+            if (notYetItems[n].comment) {
+                notYetChildren.push(el('div', { className: 'statement-comment', textContent: notYetItems[n].comment }));
+            }
+            notYetList.appendChild(el('li', null, notYetChildren));
         }
         container.appendChild(notYetList);
     }
@@ -900,9 +924,10 @@ function renderNarrative(scores) {
         var dimId2 = dims[d2];
         var stmts2 = getStatementsForDimension(dimId2);
         for (var s2 = 0; s2 < stmts2.length; s2++) {
-            var rating2 = currentAssessment.ratings[dimId2 + '_' + s2];
+            var ratingKey2 = dimId2 + '_' + s2;
+            var rating2 = currentAssessment.ratings[ratingKey2];
             if (rating2 === 'unknown') {
-                unknownItems.push({ dim: getDimensionName(dimId2), text: stmts2[s2] });
+                unknownItems.push({ dim: getDimensionName(dimId2), text: stmts2[s2], comment: currentAssessment.comments[ratingKey2] || '' });
             }
         }
     }
@@ -915,12 +940,44 @@ function renderNarrative(scores) {
         }));
         var unknownList = el('ul', { className: 'unknown-list' });
         for (var u = 0; u < unknownItems.length; u++) {
-            unknownList.appendChild(el('li', null, [
+            var unknownChildren = [
                 el('strong', { textContent: unknownItems[u].dim + ': ' }),
                 document.createTextNode(unknownItems[u].text)
-            ]));
+            ];
+            if (unknownItems[u].comment) {
+                unknownChildren.push(el('div', { className: 'statement-comment', textContent: unknownItems[u].comment }));
+            }
+            unknownList.appendChild(el('li', null, unknownChildren));
         }
         container.appendChild(unknownList);
+    }
+
+    // Comments on "Yes" statements (only shown if any exist)
+    var yesComments = [];
+    for (var d3 = 0; d3 < dims.length; d3++) {
+        var dimId3 = dims[d3];
+        var stmts3 = getStatementsForDimension(dimId3);
+        for (var s3 = 0; s3 < stmts3.length; s3++) {
+            var ratingKey3 = dimId3 + '_' + s3;
+            var rating3 = currentAssessment.ratings[ratingKey3];
+            var comment3 = currentAssessment.comments[ratingKey3];
+            if (rating3 === 'yes' && comment3) {
+                yesComments.push({ dim: getDimensionName(dimId3), text: stmts3[s3], comment: comment3 });
+            }
+        }
+    }
+
+    if (yesComments.length > 0) {
+        container.appendChild(el('h4', { textContent: 'Your comments on "Yes" statements' }));
+        var yesList = el('ul', { className: 'yes-comments-list' });
+        for (var y = 0; y < yesComments.length; y++) {
+            yesList.appendChild(el('li', null, [
+                el('strong', { textContent: yesComments[y].dim + ': ' }),
+                document.createTextNode(yesComments[y].text),
+                el('div', { className: 'statement-comment', textContent: yesComments[y].comment })
+            ]));
+        }
+        container.appendChild(yesList);
     }
 }
 
@@ -1015,6 +1072,7 @@ function saveAndFinish() {
     saveAssessment(assessment);
     saveToLocalStorage('lm2_in_progress', null);
 
+    viewingFromHistory = false;
     currentAssessment = {
         type: null,
         profileId: null,
@@ -1027,7 +1085,21 @@ function saveAndFinish() {
     goToLanding();
 }
 
+function backToHistory() {
+    viewingFromHistory = false;
+    currentAssessment = {
+        type: null,
+        profileId: null,
+        levelId: null,
+        ratings: {},
+        comments: {},
+        startedAt: null
+    };
+    goToHistory();
+}
+
 function goToCompare() {
+    viewingFromHistory = false;
     goToHistory();
 }
 
@@ -1132,7 +1204,9 @@ function viewAssessment(assessmentId) {
     currentAssessment.levelId = assessment.levelId;
     currentAssessment.ratings = assessment.ratings;
     currentAssessment.comments = assessment.comments || {};
+    currentAssessment.date = assessment.date;
 
+    viewingFromHistory = true;
     goToResults();
 }
 
