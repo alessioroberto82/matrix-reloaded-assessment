@@ -789,9 +789,22 @@ function renderRadarChart(scores, comparisonScores) {
                 r: {
                     min: 0, max: 100,
                     ticks: { stepSize: 25, display: true, font: { size: 10 }, callback: function(v) { return v + '%'; } },
-                    pointLabels: { font: { size: 11, weight: '600' } },
+                    pointLabels: {
+                        font: { size: 11, weight: '600' },
+                        callback: function(label) {
+                            if (label.length <= 25) return label;
+                            var mid = Math.ceil(label.length / 2);
+                            var breakIdx = label.lastIndexOf(' ', mid);
+                            if (breakIdx === -1) breakIdx = label.indexOf(' ', mid);
+                            if (breakIdx === -1) return label;
+                            return [label.substring(0, breakIdx), label.substring(breakIdx + 1)];
+                        }
+                    },
                     grid: { color: 'rgba(0,0,0,0.06)' }
                 }
+            },
+            layout: {
+                padding: { top: 10, bottom: 10, left: 20, right: 20 }
             },
             plugins: {
                 legend: { display: true, position: 'bottom' }
@@ -1300,9 +1313,22 @@ function showComparison(id1, id2) {
                 r: {
                     min: 0, max: 100,
                     ticks: { stepSize: 25, font: { size: 10 }, callback: function(v) { return v + '%'; } },
-                    pointLabels: { font: { size: 12, weight: '600' } },
+                    pointLabels: {
+                        font: { size: 11, weight: '600' },
+                        callback: function(label) {
+                            if (label.length <= 25) return label;
+                            var mid = Math.ceil(label.length / 2);
+                            var breakIdx = label.lastIndexOf(' ', mid);
+                            if (breakIdx === -1) breakIdx = label.indexOf(' ', mid);
+                            if (breakIdx === -1) return label;
+                            return [label.substring(0, breakIdx), label.substring(breakIdx + 1)];
+                        }
+                    },
                     grid: { color: 'rgba(0,0,0,0.06)' }
                 }
+            },
+            layout: {
+                padding: { top: 10, bottom: 10, left: 20, right: 20 }
             },
             plugins: {
                 legend: { display: true, position: 'bottom' }
