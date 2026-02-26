@@ -1,18 +1,21 @@
-// app.js — Application logic for Luscii Matrix Self-Assessment
+// app.js — Application logic for Luscii Matrix Self-Assessment (v2)
+// Rating system: Yes / Not yet / ? (percentage-based scoring)
 
 // ===== STATE =====
-let currentAssessment = {
+var currentAssessment = {
+    type: null,        // "profile" or "culture"
     profileId: null,
     levelId: null,
-    ratings: {},      // { "mastery_0": 4, "mastery_1": 3, ... }
-    notes: {},         // { "mastery": "Some notes...", ... }
+    ratings: {},       // { "mastery_0": "yes", "mastery_1": "not_yet", ... }
+    comments: {},      // { "mastery_0": "Example text...", ... }
     startedAt: null
 };
 
-let currentDimensionIndex = 0;
-let resultsChart = null;
-let comparisonChart = null;
-let selectedCompareIds = [];
+var currentDimensionIndex = 0;
+var resultsChart = null;
+var comparisonChart = null;
+var selectedCompareIds = [];
+var selectedCompareType = null;
 
 // ===== DOM HELPERS =====
 function el(tag, attrs, children) {
@@ -67,7 +70,6 @@ function showScreen(screenId) {
     screen.classList.add('active');
     window.scrollTo(0, 0);
 
-    // Move focus to first heading or focusable element for accessibility
     var focusTarget = screen.querySelector('h1, h2, .step-indicator, [autofocus]');
     if (focusTarget) {
         focusTarget.setAttribute('tabindex', '-1');
@@ -96,7 +98,7 @@ function goToHistory() {
 // ===== LANDING SCREEN =====
 function renderLandingScreen() {
     var history = loadHistory();
-    var inProgress = loadFromLocalStorage('lm_in_progress');
+    var inProgress = loadFromLocalStorage('lm2_in_progress');
 
     document.getElementById('landing-first-visit').classList.add('hidden');
     document.getElementById('landing-returning').classList.add('hidden');
@@ -104,54 +106,80 @@ function renderLandingScreen() {
 
     if (inProgress) {
         document.getElementById('landing-resume').classList.remove('hidden');
-        var profile = MATRIX_DATA.profiles[inProgress.profileId];
-        var level = MATRIX_DATA.levels[inProgress.levelId];
-        document.getElementById('resume-profile-info').textContent =
-            profile.name + ' \u2014 ' + level.name;
+        var infoText = '';
+        if (inProgress.type === 'culture') {
+            infoText = 'Culture Score Assessment';
+        } else {
+            var profile = MATRIX_DATA.profiles[inProgress.profileId];
+            var level = MATRIX_DATA.levels[inProgress.levelId];
+            infoText = profile.name + ' \u2014 ' + level.name;
+        }
+        document.getElementById('resume-profile-info').textContent = infoText;
     } else if (history.length > 0) {
         document.getElementById('landing-returning').classList.remove('hidden');
         var last = history[history.length - 1];
-        var lastProfile = MATRIX_DATA.profiles[last.profileId];
-        var lastLevel = MATRIX_DATA.levels[last.levelId];
 
         document.getElementById('last-assessment-date').textContent = formatDate(last.date);
-        document.getElementById('last-assessment-profile').textContent = lastProfile.name;
-        document.getElementById('last-assessment-level').textContent = lastLevel.name;
+        if (last.type === 'culture') {
+            document.getElementById('last-assessment-profile').textContent = 'Culture Score';
+        } else {
+            var lastProfile = MATRIX_DATA.profiles[last.profileId];
+            var lastLevel = MATRIX_DATA.levels[last.levelId];
+            document.getElementById('last-assessment-profile').textContent =
+                lastProfile.name + ' \u2014 ' + lastLevel.name;
+        }
 
-        renderScoreBars('last-assessment-bars', last.scores);
+        renderScoreBars('last-assessment-bars', last);
     } else {
         document.getElementById('landing-first-visit').classList.remove('hidden');
     }
 }
 
-function renderScoreBars(containerId, scores) {
+function renderScoreBars(containerId, assessment) {
     var container = document.getElementById(containerId);
     clearElement(container);
-    var dims = MATRIX_DATA.dimensionOrder;
+
+    var dims, scores;
+    if (assessment.type === 'culture') {
+        dims = MATRIX_DATA.cultureScore.cultureDimensionOrder;
+        scores = assessment.scores;
+    } else {
+        dims = MATRIX_DATA.dimensionOrder;
+        scores = assessment.scores;
+    }
+
     for (var i = 0; i < dims.length; i++) {
         var dimId = dims[i];
-        var dim = MATRIX_DATA.dimensions[dimId];
+        var dimName;
+        if (assessment.type === 'culture') {
+            dimName = MATRIX_DATA.cultureScore.dimensions[dimId] ?
+                MATRIX_DATA.cultureScore.dimensions[dimId].name : 'Master';
+        } else {
+            dimName = MATRIX_DATA.dimensions[dimId].name;
+        }
         var score = scores[dimId] || 0;
-        var pct = (score / 5) * 100;
+        var color = assessment.type === 'culture' ? 'var(--primary)' :
+            MATRIX_DATA.dimensions[dimId].color;
 
-        var fill = el('div', { className: 'score-bar-fill', style: { width: pct + '%', background: dim.color } });
+        var fill = el('div', { className: 'score-bar-fill', style: { width: score + '%', background: color } });
         var row = el('div', { className: 'score-bar-row' }, [
-            el('span', { className: 'score-bar-label', textContent: dim.name }),
+            el('span', { className: 'score-bar-label', textContent: dimName }),
             el('div', { className: 'score-bar-track' }, [fill]),
-            el('span', { className: 'score-bar-value', textContent: score.toFixed(1) })
+            el('span', { className: 'score-bar-value', textContent: score + '%' })
         ]);
         container.appendChild(row);
     }
 }
 
 function resumeAssessment() {
-    var saved = loadFromLocalStorage('lm_in_progress');
+    var saved = loadFromLocalStorage('lm2_in_progress');
     if (!saved) return;
     currentAssessment = saved;
     currentDimensionIndex = 0;
-    var dims = MATRIX_DATA.dimensionOrder;
+
+    var dims = getAssessmentDimensions();
     for (var i = 0; i < dims.length; i++) {
-        var stmts = getStatements(currentAssessment.profileId, currentAssessment.levelId, dims[i]);
+        var stmts = getStatementsForDimension(dims[i]);
         var allRated = true;
         for (var j = 0; j < stmts.length; j++) {
             if (currentAssessment.ratings[dims[i] + '_' + j] === undefined) {
@@ -171,7 +199,7 @@ function resumeAssessment() {
 }
 
 function discardAndStart() {
-    saveToLocalStorage('lm_in_progress', null);
+    saveToLocalStorage('lm2_in_progress', null);
     goToProfile();
 }
 
@@ -236,7 +264,7 @@ function closeProfileDetail() {
 
 function selectProfile(profileId) {
     currentAssessment.profileId = profileId;
-    saveToLocalStorage('lm_profile', profileId);
+    saveToLocalStorage('lm2_profile', profileId);
     renderLevelOptions(profileId);
     showScreen('screen-level');
 }
@@ -260,7 +288,8 @@ function renderLevelOptions(profileId) {
         if (available.indexOf(levelId) === -1) continue;
 
         var level = MATRIX_DATA.levels[levelId];
-        var timeline = MATRIX_DATA.progressionTimeline[profileId][levelId];
+        var timeline = MATRIX_DATA.progressionTimeline[profileId] ?
+            MATRIX_DATA.progressionTimeline[profileId][levelId] : null;
         var isSelected = currentAssessment.levelId === levelId;
 
         var radio = el('input', {
@@ -280,6 +309,16 @@ function renderLevelOptions(profileId) {
             content.appendChild(el('span', { className: 'level-option-timeline', textContent: 'Typical: ' + timeline }));
         }
 
+        // Check if statements exist for this profile+level
+        var hasStatements = !!MATRIX_DATA.statements[profileId + '_' + levelId + '_mastery'];
+        if (!hasStatements) {
+            content.appendChild(el('span', {
+                className: 'level-option-timeline',
+                textContent: 'No assessment data available',
+                style: { color: 'var(--text-muted)' }
+            }));
+        }
+
         var label = el('label', {
             className: 'level-option' + (isSelected ? ' selected' : ''),
             'for': 'level-' + levelId
@@ -297,7 +336,7 @@ function renderLevelOptions(profileId) {
 
 function selectLevel(levelId) {
     currentAssessment.levelId = levelId;
-    saveToLocalStorage('lm_level', levelId);
+    saveToLocalStorage('lm2_level', levelId);
 
     document.querySelectorAll('.level-option').forEach(function(opt) {
         var input = opt.querySelector('input');
@@ -311,10 +350,61 @@ function updateContinueButton() {
     document.getElementById('btn-continue-assessment').disabled = !currentAssessment.levelId;
 }
 
+// ===== ASSESSMENT DIMENSIONS HELPER =====
+function getAssessmentDimensions() {
+    if (currentAssessment.type === 'culture') {
+        var dims = MATRIX_DATA.cultureScore.cultureDimensionOrder.slice();
+        dims.push('master');
+        return dims;
+    }
+    return MATRIX_DATA.dimensionOrder;
+}
+
+function getStatementsForDimension(dimId) {
+    if (currentAssessment.type === 'culture') {
+        if (dimId === 'master') {
+            return MATRIX_DATA.cultureScore.masterStatements;
+        }
+        return MATRIX_DATA.cultureScore.dimensions[dimId].statements;
+    }
+    return getStatements(currentAssessment.profileId, currentAssessment.levelId, dimId);
+}
+
+function getDimensionName(dimId) {
+    if (currentAssessment.type === 'culture') {
+        if (dimId === 'master') return 'Master Statements';
+        return MATRIX_DATA.cultureScore.dimensions[dimId].name;
+    }
+    return MATRIX_DATA.dimensions[dimId].name;
+}
+
+function getDimensionColor(dimId) {
+    if (currentAssessment.type === 'culture') {
+        return 'var(--primary)';
+    }
+    return MATRIX_DATA.dimensions[dimId].color;
+}
+
+// ===== CULTURE ASSESSMENT =====
+function startCultureAssessment() {
+    currentAssessment = {
+        type: 'culture',
+        profileId: null,
+        levelId: null,
+        ratings: {},
+        comments: {},
+        startedAt: new Date().toISOString()
+    };
+    currentDimensionIndex = 0;
+    saveInProgressAssessment();
+    showAssessmentScreen();
+}
+
 // ===== ASSESSMENT =====
 function startAssessment() {
+    currentAssessment.type = 'profile';
     currentAssessment.ratings = {};
-    currentAssessment.notes = {};
+    currentAssessment.comments = {};
     currentAssessment.startedAt = new Date().toISOString();
     currentDimensionIndex = 0;
     saveInProgressAssessment();
@@ -327,20 +417,38 @@ function showAssessmentScreen() {
 }
 
 function renderDimensionAssessment() {
-    var dims = MATRIX_DATA.dimensionOrder;
+    var dims = getAssessmentDimensions();
     var dimId = dims[currentDimensionIndex];
-    var dim = MATRIX_DATA.dimensions[dimId];
-    var profile = MATRIX_DATA.profiles[currentAssessment.profileId];
-    var level = MATRIX_DATA.levels[currentAssessment.levelId];
+    var dimName = getDimensionName(dimId);
+    var dimColor = getDimensionColor(dimId);
+
+    // Step label
+    if (currentAssessment.type === 'culture') {
+        document.getElementById('assessment-step-label').textContent = 'Culture Score Assessment';
+    } else {
+        document.getElementById('assessment-step-label').textContent = 'Step 3 of 3 \u2014 Self-Assessment';
+    }
 
     // Context
-    document.getElementById('assessment-context').textContent =
-        profile.name + ' \u2022 ' + level.name;
+    if (currentAssessment.type === 'culture') {
+        document.getElementById('assessment-context').textContent = 'Culture Score';
+    } else {
+        var profile = MATRIX_DATA.profiles[currentAssessment.profileId];
+        var level = MATRIX_DATA.levels[currentAssessment.levelId];
+        document.getElementById('assessment-context').textContent =
+            profile.name + ' \u2022 ' + level.name;
+    }
 
     // Back button
     var backBtn = document.getElementById('btn-assessment-back');
     if (currentDimensionIndex === 0) {
-        backBtn.onclick = function() { goToLevel(); };
+        backBtn.onclick = function() {
+            if (currentAssessment.type === 'culture') {
+                goToLanding();
+            } else {
+                goToLevel();
+            }
+        };
     } else {
         backBtn.onclick = function() { prevDimension(); };
     }
@@ -349,116 +457,147 @@ function renderDimensionAssessment() {
     renderDimensionProgress(currentDimensionIndex);
 
     // Dimension header
-    var dimName = document.getElementById('dimension-name');
-    dimName.textContent = dim.name;
-    dimName.style.color = dim.color;
-    document.getElementById('dimension-description').textContent = dim.longDescription;
-    document.querySelector('.dimension-header').style.borderLeftColor = dim.color;
+    var dimNameEl = document.getElementById('dimension-name');
+    dimNameEl.textContent = dimName;
+    dimNameEl.style.color = dimColor;
+
+    var descEl = document.getElementById('dimension-description');
+    if (currentAssessment.type === 'culture') {
+        descEl.textContent = '';
+    } else {
+        descEl.textContent = MATRIX_DATA.dimensions[dimId].question || MATRIX_DATA.dimensions[dimId].longDescription;
+    }
+    document.querySelector('.dimension-header').style.borderLeftColor = dimColor;
+
+    // Rating guidelines
+    renderRatingGuidelines();
 
     // Statements
-    var statements = getStatements(currentAssessment.profileId, currentAssessment.levelId, dimId);
+    var statements = getStatementsForDimension(dimId);
     var container = document.getElementById('statements-container');
     clearElement(container);
 
     for (var i = 0; i < statements.length; i++) {
         var ratingKey = dimId + '_' + i;
         var currentRating = currentAssessment.ratings[ratingKey];
+        var currentComment = currentAssessment.comments[ratingKey] || '';
 
-        var optionsDiv = el('div', { className: 'rating-options' });
-        for (var v = 1; v <= 5; v++) {
+        // Rating buttons: Not yet / ? / Yes
+        var ratingOptions = [
+            { value: 'not_yet', label: 'Not yet', cls: 'rating-not-yet' },
+            { value: 'unknown', label: '?', cls: 'rating-unknown' },
+            { value: 'yes', label: 'Yes', cls: 'rating-yes' }
+        ];
+
+        var optionsDiv = el('div', { className: 'rating-options-v2' });
+        for (var v = 0; v < ratingOptions.length; v++) {
+            var opt = ratingOptions[v];
             var radioInput = el('input', {
                 type: 'radio',
                 name: 'rating-' + ratingKey,
-                id: 'r-' + ratingKey + '-' + v,
-                value: String(v)
+                id: 'r-' + ratingKey + '-' + opt.value,
+                value: opt.value
             });
-            if (currentRating === v) radioInput.checked = true;
+            if (currentRating === opt.value) radioInput.checked = true;
 
-            var radioLabel = el('label', { 'for': 'r-' + ratingKey + '-' + v, textContent: String(v) });
+            var radioLabel = el('label', {
+                'for': 'r-' + ratingKey + '-' + opt.value,
+                className: 'rating-btn ' + opt.cls,
+                textContent: opt.label
+            });
 
             (function(key, val) {
                 radioInput.addEventListener('change', function() {
                     rateStatement(key, val);
                 });
-            })(ratingKey, v);
+            })(ratingKey, opt.value);
 
-            optionsDiv.appendChild(el('div', { className: 'rating-option' }, [radioInput, radioLabel]));
+            optionsDiv.appendChild(el('div', { className: 'rating-option-v2' }, [radioInput, radioLabel]));
         }
 
-        var scaleDiv = el('div', { className: 'rating-scale' }, [
-            el('span', { className: 'rating-label-min', textContent: 'Not yet' }),
-            optionsDiv,
-            el('span', { className: 'rating-label-max', textContent: 'Consistently' })
-        ]);
+        // Comment toggle + textarea
+        var commentSection = el('div', { className: 'statement-comment-section' });
+        var commentToggle = el('button', {
+            className: 'btn-text comment-toggle',
+            textContent: currentComment ? 'Edit comment' : 'Add comment'
+        });
+        var commentTextarea = el('textarea', {
+            className: 'comment-textarea' + (currentComment ? '' : ' hidden'),
+            placeholder: 'Describe a concrete example from your work...',
+            rows: '2'
+        });
+        commentTextarea.value = currentComment;
 
-        var card = el('div', { className: 'statement-card' }, [
-            el('p', { className: 'statement-text', textContent: '\u201C' + statements[i] + '\u201D' }),
-            scaleDiv
-        ]);
-
-        // Show evidence examples if any exist
-        var examples = getEvidenceForStatement(currentAssessment.profileId, currentAssessment.levelId, dimId, i);
-        if (examples.length > 0) {
-            var previewDiv = el('div', { className: 'statement-evidence-preview' });
-            var toggle = el('div', { className: 'statement-evidence-count',
-                textContent: examples.length + ' example' + (examples.length !== 1 ? 's' : '') + ' collected \u2014 tap to view' });
-            var detailDiv = el('div', { className: 'hidden' });
-            for (var e = 0; e < examples.length; e++) {
-                detailDiv.appendChild(el('div', { className: 'journal-example' }, [
-                    el('div', { className: 'journal-example-date', textContent: formatDate(examples[e].date) }),
-                    el('div', { className: 'journal-example-text', textContent: examples[e].text })
-                ]));
-            }
-            toggle.addEventListener('click', function() {
-                var detail = this.nextElementSibling;
-                if (detail.classList.contains('hidden')) {
-                    detail.classList.remove('hidden');
-                    this.textContent = this.textContent.replace('tap to view', 'tap to hide');
+        (function(key) {
+            commentToggle.addEventListener('click', function() {
+                var ta = this.nextElementSibling;
+                if (ta.classList.contains('hidden')) {
+                    ta.classList.remove('hidden');
+                    ta.focus();
+                    this.textContent = 'Hide comment';
                 } else {
-                    detail.classList.add('hidden');
-                    this.textContent = this.textContent.replace('tap to hide', 'tap to view');
+                    ta.classList.add('hidden');
+                    this.textContent = ta.value ? 'Edit comment' : 'Add comment';
                 }
             });
-            previewDiv.appendChild(toggle);
-            previewDiv.appendChild(detailDiv);
-            card.appendChild(previewDiv);
-        }
+            commentTextarea.addEventListener('blur', function() {
+                currentAssessment.comments[key] = this.value;
+                saveInProgressAssessment();
+            });
+        })(ratingKey);
+
+        commentSection.appendChild(commentToggle);
+        commentSection.appendChild(commentTextarea);
+
+        var card = el('div', { className: 'statement-card' }, [
+            el('p', { className: 'statement-text', textContent: statements[i] }),
+            optionsDiv,
+            commentSection
+        ]);
 
         container.appendChild(card);
     }
-
-    // Notes
-    var notesTextarea = document.getElementById('dimension-notes');
-    notesTextarea.value = currentAssessment.notes[dimId] || '';
-    notesTextarea.classList.add('hidden');
-    document.getElementById('btn-toggle-notes').textContent = 'Add notes (optional)';
-
-    if (currentAssessment.notes[dimId]) {
-        notesTextarea.classList.remove('hidden');
-        document.getElementById('btn-toggle-notes').textContent = 'Hide notes';
-    }
-
-    notesTextarea.onblur = function() {
-        currentAssessment.notes[dimId] = this.value;
-        saveInProgressAssessment();
-    };
 
     // Next button text
     var nextBtn = document.getElementById('btn-next-dimension');
     if (currentDimensionIndex === dims.length - 1) {
         nextBtn.textContent = 'See Results \u2192';
     } else {
-        var nextDim = MATRIX_DATA.dimensions[dims[currentDimensionIndex + 1]];
-        nextBtn.textContent = 'Next: ' + nextDim.name + ' \u2192';
+        var nextDimName = getDimensionName(dims[currentDimensionIndex + 1]);
+        nextBtn.textContent = 'Next: ' + nextDimName + ' \u2192';
     }
 
     window.scrollTo(0, 0);
 }
 
+function renderRatingGuidelines() {
+    var container = document.getElementById('rating-guidelines');
+    if (container.childNodes.length > 0) return; // Already rendered
+    clearElement(container);
+    var guidelines = MATRIX_DATA.ratingGuidelines;
+    var list = el('ul', { className: 'guidelines-list' });
+    for (var i = 0; i < guidelines.length; i++) {
+        list.appendChild(el('li', { textContent: guidelines[i] }));
+    }
+    container.appendChild(list);
+}
+
+function toggleGuidelines() {
+    var guidelines = document.getElementById('rating-guidelines');
+    var btn = document.getElementById('btn-toggle-guidelines');
+    if (guidelines.classList.contains('hidden')) {
+        guidelines.classList.remove('hidden');
+        btn.textContent = 'Hide guidelines';
+    } else {
+        guidelines.classList.add('hidden');
+        btn.textContent = 'Rating guidelines';
+    }
+}
+
 function renderDimensionProgress(activeIndex) {
     var container = document.getElementById('dimension-progress');
     clearElement(container);
-    var dims = MATRIX_DATA.dimensionOrder;
+    var dims = getAssessmentDimensions();
 
     for (var i = 0; i < dims.length; i++) {
         if (i > 0) {
@@ -467,7 +606,7 @@ function renderDimensionProgress(activeIndex) {
         var cls = 'dim-dot';
         if (i === activeIndex) cls += ' active';
         else if (i < activeIndex) cls += ' completed';
-        container.appendChild(el('div', { className: cls, title: MATRIX_DATA.dimensions[dims[i]].name }));
+        container.appendChild(el('div', { className: cls, title: getDimensionName(dims[i]) }));
     }
 }
 
@@ -476,7 +615,7 @@ function getStatements(profileId, levelId, dimensionId) {
     var stmts = MATRIX_DATA.statements[key];
     if (stmts) return stmts;
     console.warn('Missing statements for:', key);
-    return [MATRIX_DATA.dimensions[dimensionId].longDescription];
+    return [];
 }
 
 function rateStatement(ratingKey, value) {
@@ -484,34 +623,17 @@ function rateStatement(ratingKey, value) {
     saveInProgressAssessment();
 }
 
-function toggleNotes() {
-    var textarea = document.getElementById('dimension-notes');
-    var btn = document.getElementById('btn-toggle-notes');
-    if (textarea.classList.contains('hidden')) {
-        textarea.classList.remove('hidden');
-        btn.textContent = 'Hide notes';
-        textarea.focus();
-    } else {
-        textarea.classList.add('hidden');
-        btn.textContent = 'Add notes (optional)';
-    }
-}
-
 function prevDimension() {
     if (currentDimensionIndex > 0) {
-        var dimId = MATRIX_DATA.dimensionOrder[currentDimensionIndex];
-        currentAssessment.notes[dimId] = document.getElementById('dimension-notes').value;
-        saveInProgressAssessment();
+        saveCurrentComments();
         currentDimensionIndex--;
         renderDimensionAssessment();
     }
 }
 
 function nextDimension() {
-    var dims = MATRIX_DATA.dimensionOrder;
-    var dimId = dims[currentDimensionIndex];
-    currentAssessment.notes[dimId] = document.getElementById('dimension-notes').value;
-    saveInProgressAssessment();
+    var dims = getAssessmentDimensions();
+    saveCurrentComments();
 
     if (currentDimensionIndex < dims.length - 1) {
         currentDimensionIndex++;
@@ -521,23 +643,43 @@ function nextDimension() {
     }
 }
 
+function saveCurrentComments() {
+    // Comments are saved on blur, but ensure we capture any unsaved
+    var textareas = document.querySelectorAll('.comment-textarea');
+    textareas.forEach(function(ta) {
+        var card = ta.closest('.statement-card');
+        if (!card) return;
+        var radio = card.querySelector('input[type="radio"]');
+        if (!radio) return;
+        var name = radio.name.replace('rating-', '');
+        currentAssessment.comments[name] = ta.value;
+    });
+    saveInProgressAssessment();
+}
+
 // ===== RESULTS =====
 function goToResults() {
     var scores = calculateAllScores();
-    var profile = MATRIX_DATA.profiles[currentAssessment.profileId];
-    var level = MATRIX_DATA.levels[currentAssessment.levelId];
 
-    document.getElementById('results-context').textContent =
-        profile.name + ' \u2022 ' + level.name + ' \u2022 ' + formatDate(new Date().toISOString());
+    if (currentAssessment.type === 'culture') {
+        document.getElementById('results-context').textContent =
+            'Culture Score \u2022 ' + formatDate(new Date().toISOString());
+    } else {
+        var profile = MATRIX_DATA.profiles[currentAssessment.profileId];
+        var level = MATRIX_DATA.levels[currentAssessment.levelId];
+        document.getElementById('results-context').textContent =
+            profile.name + ' \u2022 ' + level.name + ' \u2022 ' + formatDate(new Date().toISOString());
+    }
 
     renderRadarChart(scores);
     renderScoreSummary(scores);
-    renderNarrative(currentAssessment.profileId, currentAssessment.levelId, scores);
-    renderGrowthSuggestions(currentAssessment.profileId, currentAssessment.levelId, scores);
+    renderNarrative(scores);
+    renderGrowthSuggestions(scores);
 
     var history = loadHistory();
+    var sameTypeHistory = history.filter(function(a) { return a.type === currentAssessment.type; });
     var compareBtn = document.getElementById('btn-compare');
-    if (history.length > 0) {
+    if (sameTypeHistory.length > 0) {
         compareBtn.classList.remove('hidden');
     } else {
         compareBtn.classList.add('hidden');
@@ -547,44 +689,40 @@ function goToResults() {
 }
 
 function calculateAllScores() {
+    var dims = getAssessmentDimensions();
     var scores = {};
-    var dims = MATRIX_DATA.dimensionOrder;
+    var totalYes = 0;
+    var totalStatements = 0;
+
     for (var i = 0; i < dims.length; i++) {
-        scores[dims[i]] = calculateDimensionScore(dims[i]);
+        var dimId = dims[i];
+        var stmts = getStatementsForDimension(dimId);
+        var yesCount = 0;
+        for (var j = 0; j < stmts.length; j++) {
+            if (currentAssessment.ratings[dimId + '_' + j] === 'yes') {
+                yesCount++;
+            }
+        }
+        scores[dimId] = Math.round((yesCount / stmts.length) * 100);
+        totalYes += yesCount;
+        totalStatements += stmts.length;
     }
+
+    scores.total = Math.round((totalYes / totalStatements) * 100);
     return scores;
 }
 
-function calculateDimensionScore(dimensionId) {
-    var statements = getStatements(currentAssessment.profileId, currentAssessment.levelId, dimensionId);
-    var total = 0;
-    var count = 0;
-    for (var i = 0; i < statements.length; i++) {
-        var key = dimensionId + '_' + i;
-        if (currentAssessment.ratings[key] !== undefined) {
-            total += currentAssessment.ratings[key];
-            count++;
-        }
-    }
-    if (count === 0) return 0;
-    return Math.round((total / count) * 10) / 10;
-}
-
 function renderRadarChart(scores, comparisonScores) {
-    var dims = MATRIX_DATA.dimensionOrder;
+    var dims = getAssessmentDimensions();
     var labels = dims.map(function(d) {
-        return MATRIX_DATA.dimensions[d].name + ' (' + (scores[d] || 0).toFixed(1) + ')';
+        return getDimensionName(d) + ' (' + (scores[d] || 0) + '%)';
     });
     var data = dims.map(function(d) { return scores[d] || 0; });
-    var colors = dims.map(function(d) { return MATRIX_DATA.dimensions[d].color; });
-
-    // Baseline dataset: expected level threshold (3.5 = "Solid" minimum)
-    var baselineValue = 3.5;
-    var baselineData = dims.map(function() { return baselineValue; });
+    var baselineData = dims.map(function() { return 100; });
 
     var datasets = [
         {
-            label: 'Expected (' + baselineValue + ')',
+            label: 'Expected (100%)',
             data: baselineData,
             backgroundColor: 'transparent',
             borderColor: 'rgba(0, 0, 0, 0.15)',
@@ -599,8 +737,8 @@ function renderRadarChart(scores, comparisonScores) {
             backgroundColor: 'rgba(26, 92, 92, 0.15)',
             borderColor: 'rgba(26, 92, 92, 0.8)',
             borderWidth: 2,
-            pointBackgroundColor: colors,
-            pointBorderColor: colors,
+            pointBackgroundColor: 'rgba(26, 92, 92, 0.8)',
+            pointBorderColor: 'rgba(26, 92, 92, 0.8)',
             pointRadius: 5
         }
     ];
@@ -630,9 +768,9 @@ function renderRadarChart(scores, comparisonScores) {
             maintainAspectRatio: true,
             scales: {
                 r: {
-                    min: 0, max: 5,
-                    ticks: { stepSize: 1, display: true, font: { size: 10 } },
-                    pointLabels: { font: { size: 12, weight: '600' } },
+                    min: 0, max: 100,
+                    ticks: { stepSize: 25, display: true, font: { size: 10 }, callback: function(v) { return v + '%'; } },
+                    pointLabels: { font: { size: 11, weight: '600' } },
                     grid: { color: 'rgba(0,0,0,0.06)' }
                 }
             },
@@ -647,190 +785,206 @@ function renderRadarChart(scores, comparisonScores) {
 function renderScoreSummary(scores) {
     var container = document.getElementById('score-summary');
     clearElement(container);
-    var dims = MATRIX_DATA.dimensionOrder;
+    var dims = getAssessmentDimensions();
 
     for (var i = 0; i < dims.length; i++) {
         var dimId = dims[i];
-        var dim = MATRIX_DATA.dimensions[dimId];
+        var dimName = getDimensionName(dimId);
         var score = scores[dimId] || 0;
         var interp = getScoreInterpretation(score);
+        var color = getDimensionColor(dimId);
 
-        var card = el('div', { className: 'score-card', style: { borderTopColor: dim.color } }, [
-            el('div', { className: 'score-card-label', textContent: dim.name }),
-            el('div', { className: 'score-card-value', textContent: score.toFixed(1), style: { color: dim.color } }),
+        var card = el('div', { className: 'score-card', style: { borderTopColor: color } }, [
+            el('div', { className: 'score-card-label', textContent: dimName }),
+            el('div', { className: 'score-card-value', textContent: score + '%', style: { color: color } }),
             el('div', { className: 'score-card-interpretation', textContent: interp.label })
         ]);
         container.appendChild(card);
     }
+
+    // Total score card
+    var totalCard = el('div', { className: 'score-card score-card-total' }, [
+        el('div', { className: 'score-card-label', textContent: 'Total' }),
+        el('div', { className: 'score-card-value', textContent: scores.total + '%' }),
+        el('div', { className: 'score-card-interpretation', textContent: getScoreInterpretation(scores.total).label })
+    ]);
+    container.appendChild(totalCard);
 }
 
 function getScoreInterpretation(score) {
     var labels = MATRIX_DATA.scoreLabels;
-    if (score >= labels.strong.min) return labels.strong;
-    if (score >= labels.solid.min) return labels.solid;
-    if (score >= labels.developing.min) return labels.developing;
-    return labels.emerging;
+    for (var i = 0; i < labels.length; i++) {
+        if (score >= labels[i].min) return labels[i];
+    }
+    return labels[labels.length - 1];
 }
 
 // ===== NARRATIVE =====
-function renderNarrative(profileId, levelId, scores) {
+function renderNarrative(scores) {
     var container = document.getElementById('narrative-section');
     clearElement(container);
-    var dims = MATRIX_DATA.dimensionOrder;
-    var profile = MATRIX_DATA.profiles[profileId];
-    var level = MATRIX_DATA.levels[levelId];
+
+    container.appendChild(el('h3', { textContent: 'Summary' }));
+
+    var dims = getAssessmentDimensions();
+
+    // Profile context
+    if (currentAssessment.type === 'profile') {
+        var profile = MATRIX_DATA.profiles[currentAssessment.profileId];
+        var level = MATRIX_DATA.levels[currentAssessment.levelId];
+        var levelExp = MATRIX_DATA.levelExpectations[currentAssessment.levelId];
+        container.appendChild(el('p', {
+            textContent: 'As a ' + profile.name + ' at ' + level.name + ' level, you are expected to ' + levelExp + '.'
+        }));
+    } else {
+        container.appendChild(el('p', {
+            textContent: 'Culture Score reflects how well you embody Luscii\u2019s cultural values across 5 dimensions.'
+        }));
+    }
+
+    // Total score
+    container.appendChild(el('p', {
+        textContent: 'Overall score: ' + scores.total + '% (' + getScoreInterpretation(scores.total).description + ').'
+    }));
 
     // Find strongest and weakest
     var strongest = dims[0];
     var weakest = dims[0];
     for (var i = 1; i < dims.length; i++) {
-        if (scores[dims[i]] > scores[strongest]) strongest = dims[i];
-        if (scores[dims[i]] < scores[weakest]) weakest = dims[i];
+        if ((scores[dims[i]] || 0) > (scores[strongest] || 0)) strongest = dims[i];
+        if ((scores[dims[i]] || 0) < (scores[weakest] || 0)) weakest = dims[i];
     }
 
-    // M+A vs I+O
-    var maAvg = ((scores.mastery || 0) + (scores.autonomy || 0)) / 2;
-    var ioAvg = ((scores.impact || 0) + (scores.ownership || 0)) / 2;
+    if (scores[strongest] > scores[weakest]) {
+        var strongP = el('p');
+        strongP.appendChild(document.createTextNode('Your strongest area is '));
+        strongP.appendChild(el('strong', { textContent: getDimensionName(strongest) }));
+        strongP.appendChild(document.createTextNode(' (' + scores[strongest] + '%).'));
+        container.appendChild(strongP);
 
-    container.appendChild(el('h3', { textContent: 'Narrative Summary' }));
-
-    // Profile context
-    var contextText = 'As a ' + profile.name + ' at ' + level.name + ' level, you are expected to ' +
-        MATRIX_DATA.levelExpectations[levelId] + '.';
-    container.appendChild(el('p', { textContent: contextText }));
-
-    // Strongest dimension
-    var strongText = 'Your strongest dimension is ' + MATRIX_DATA.dimensions[strongest].name +
-        ' (' + scores[strongest].toFixed(1) + ') \u2014 ' + getScoreInterpretation(scores[strongest]).description + '.';
-    var strongP = el('p');
-    strongP.appendChild(document.createTextNode('Your strongest dimension is '));
-    strongP.appendChild(el('strong', { textContent: MATRIX_DATA.dimensions[strongest].name }));
-    strongP.appendChild(document.createTextNode(' (' + scores[strongest].toFixed(1) + ') \u2014 ' +
-        getScoreInterpretation(scores[strongest]).description + '.'));
-    container.appendChild(strongP);
-
-    // Weakest dimension
-    if (weakest !== strongest) {
         var weakP = el('p');
         weakP.appendChild(document.createTextNode('Your growth opportunity is in '));
-        weakP.appendChild(el('strong', { textContent: MATRIX_DATA.dimensions[weakest].name }));
-        weakP.appendChild(document.createTextNode(' (' + scores[weakest].toFixed(1) + ') \u2014 ' +
-            getScoreInterpretation(scores[weakest]).description + '.'));
+        weakP.appendChild(el('strong', { textContent: getDimensionName(weakest) }));
+        weakP.appendChild(document.createTextNode(' (' + scores[weakest] + '%).'));
         container.appendChild(weakP);
     }
 
-    // Natural development order
-    if (maAvg >= ioAvg + 0.3) {
-        container.appendChild(el('p', {
-            textContent: 'Your Mastery and Autonomy scores (' + scores.mastery.toFixed(1) + ', ' +
-                scores.autonomy.toFixed(1) + ') are stronger than Impact and Ownership (' +
-                scores.impact.toFixed(1) + ', ' + scores.ownership.toFixed(1) +
-                '). This is consistent with the natural development order in Matrix Reloaded \u2014 foundation first, then influence.'
-        }));
-    } else if (ioAvg >= maAvg + 0.3) {
-        container.appendChild(el('p', {
-            textContent: 'Your Impact and Ownership scores (' + scores.impact.toFixed(1) + ', ' +
-                scores.ownership.toFixed(1) + ') are higher than Mastery and Autonomy (' +
-                scores.mastery.toFixed(1) + ', ' + scores.autonomy.toFixed(1) +
-                '). This is an unusual pattern \u2014 consider strengthening your foundations to sustain your influence.'
-        }));
-    }
-
-    // Level readiness
-    var allAbove35 = true;
-    var allAbove40 = true;
-    var anyBelow25 = false;
-    for (var j = 0; j < dims.length; j++) {
-        if (scores[dims[j]] < 3.5) allAbove35 = false;
-        if (scores[dims[j]] < 4.0) allAbove40 = false;
-        if (scores[dims[j]] < 2.5) anyBelow25 = true;
-    }
-
-    if (allAbove40) {
-        container.appendChild(el('p', {
-            textContent: 'All dimensions are strong. Consider how Master-level behaviours \u2014 coaching, knowledge transfer, and organisational influence \u2014 can be your next growth area.'
-        }));
-    } else if (allAbove35) {
-        container.appendChild(el('p', {
-            textContent: 'Your scores suggest readiness for the next level. All dimensions are at 3.5 or above.'
-        }));
-    } else if (anyBelow25) {
-        var deepenP = el('p');
-        deepenP.appendChild(document.createTextNode('Focus on strengthening '));
-        deepenP.appendChild(el('strong', { textContent: MATRIX_DATA.dimensions[weakest].name }));
-        deepenP.appendChild(document.createTextNode(' at your current level before considering the next step.'));
-        container.appendChild(deepenP);
-    }
-}
-
-// ===== GROWTH SUGGESTIONS =====
-function renderGrowthSuggestions(profileId, levelId, scores) {
-    var container = document.getElementById('growth-section');
-    clearElement(container);
-    var dims = MATRIX_DATA.dimensionOrder;
-
-    var deepenItems = [];
-    var prepareItems = [];
-
-    for (var i = 0; i < dims.length; i++) {
-        var dimId = dims[i];
-        var score = scores[dimId] || 0;
-        if (score >= 4.5) continue;
-
-        var range = score < 2.5 ? 'low' : (score < 3.5 ? 'medium' : 'high');
-        var key = profileId + '_' + dimId + '_' + range;
-        var suggestions = MATRIX_DATA.growthSuggestions[key] || [];
-
-        if (score < 3.5) {
-            for (var j = 0; j < suggestions.length; j++) {
-                deepenItems.push({ dimension: MATRIX_DATA.dimensions[dimId].name, text: suggestions[j] });
-            }
-        } else {
-            for (var k = 0; k < suggestions.length; k++) {
-                prepareItems.push({ dimension: MATRIX_DATA.dimensions[dimId].name, text: suggestions[k] });
+    // Not-yet statements list
+    var notYetItems = [];
+    for (var d = 0; d < dims.length; d++) {
+        var dimId = dims[d];
+        var stmts = getStatementsForDimension(dimId);
+        for (var s = 0; s < stmts.length; s++) {
+            var rating = currentAssessment.ratings[dimId + '_' + s];
+            if (rating === 'not_yet') {
+                notYetItems.push({ dim: getDimensionName(dimId), text: stmts[s] });
             }
         }
     }
 
-    // Cross-dimension insight
-    if (scores.mastery < 3.0 && scores.ownership > 3.5) {
-        deepenItems.unshift({
-            dimension: 'Cross-dimension',
-            text: 'Consider strengthening Mastery first \u2014 it enables sustainable Ownership.'
-        });
+    if (notYetItems.length > 0) {
+        container.appendChild(el('h4', { textContent: 'Statements rated "Not yet" (' + notYetItems.length + ')' }));
+        var notYetList = el('ul', { className: 'not-yet-list' });
+        for (var n = 0; n < notYetItems.length; n++) {
+            notYetList.appendChild(el('li', null, [
+                el('strong', { textContent: notYetItems[n].dim + ': ' }),
+                document.createTextNode(notYetItems[n].text)
+            ]));
+        }
+        container.appendChild(notYetList);
     }
 
-    if (deepenItems.length === 0 && prepareItems.length === 0) {
-        container.appendChild(el('div', { className: 'growth-category' }, [
-            el('div', { className: 'growth-category-title', textContent: 'All dimensions strong' }),
-            el('p', {
-                textContent: 'All your dimensions are at or near maximum. Focus on Master-level behaviours: coaching others, transferring knowledge, and expanding your influence across the organisation.',
-                style: { fontSize: '0.9rem', lineHeight: '1.5' }
-            })
-        ]));
+    // Unknown statements
+    var unknownItems = [];
+    for (var d2 = 0; d2 < dims.length; d2++) {
+        var dimId2 = dims[d2];
+        var stmts2 = getStatementsForDimension(dimId2);
+        for (var s2 = 0; s2 < stmts2.length; s2++) {
+            var rating2 = currentAssessment.ratings[dimId2 + '_' + s2];
+            if (rating2 === 'unknown') {
+                unknownItems.push({ dim: getDimensionName(dimId2), text: stmts2[s2] });
+            }
+        }
     }
-    if (deepenItems.length > 0) {
-        container.appendChild(renderGrowthCategory('Deepen Current Level', deepenItems));
-    }
-    if (prepareItems.length > 0) {
-        container.appendChild(renderGrowthCategory('Prepare for Next Level', prepareItems));
+
+    if (unknownItems.length > 0) {
+        container.appendChild(el('h4', { textContent: 'Statements rated "?" (' + unknownItems.length + ')' }));
+        container.appendChild(el('p', {
+            textContent: 'Consider gathering more evidence for these behaviours:',
+            style: { fontSize: '0.9rem', color: 'var(--text-muted)' }
+        }));
+        var unknownList = el('ul', { className: 'unknown-list' });
+        for (var u = 0; u < unknownItems.length; u++) {
+            unknownList.appendChild(el('li', null, [
+                el('strong', { textContent: unknownItems[u].dim + ': ' }),
+                document.createTextNode(unknownItems[u].text)
+            ]));
+        }
+        container.appendChild(unknownList);
     }
 }
 
-function renderGrowthCategory(title, items) {
-    var category = el('div', { className: 'growth-category' }, [
-        el('div', { className: 'growth-category-title', textContent: title })
-    ]);
-    for (var i = 0; i < items.length; i++) {
-        var itemDiv = el('div', { className: 'growth-item' }, [
-            el('span', null, [
-                el('strong', { textContent: items[i].dimension + ': ' }),
-                document.createTextNode(items[i].text)
-            ])
-        ]);
-        category.appendChild(itemDiv);
+// ===== GROWTH SUGGESTIONS =====
+function renderGrowthSuggestions(scores) {
+    var container = document.getElementById('growth-section');
+    clearElement(container);
+    var dims = getAssessmentDimensions();
+
+    var allStrong = true;
+    for (var i = 0; i < dims.length; i++) {
+        if ((scores[dims[i]] || 0) < 80) {
+            allStrong = false;
+            break;
+        }
     }
-    return category;
+
+    if (allStrong) {
+        container.appendChild(el('div', { className: 'growth-category' }, [
+            el('div', { className: 'growth-category-title', textContent: 'All dimensions strong' }),
+            el('p', {
+                textContent: 'All your dimensions are at 80% or above. Consider how you can deepen your impact through coaching, knowledge transfer, and organisational influence.',
+                style: { fontSize: '0.9rem', lineHeight: '1.5' }
+            })
+        ]));
+        return;
+    }
+
+    // Show dimensions below 80% with their unmet statements
+    container.appendChild(el('h3', { textContent: 'Focus Areas' }));
+
+    for (var j = 0; j < dims.length; j++) {
+        var dimId = dims[j];
+        var score = scores[dimId] || 0;
+        if (score >= 80) continue;
+
+        var stmts = getStatementsForDimension(dimId);
+        var unmet = [];
+        for (var k = 0; k < stmts.length; k++) {
+            var rating = currentAssessment.ratings[dimId + '_' + k];
+            if (rating !== 'yes') {
+                unmet.push({ text: stmts[k], rating: rating || 'unrated' });
+            }
+        }
+
+        if (unmet.length === 0) continue;
+
+        var category = el('div', { className: 'growth-category' });
+        category.appendChild(el('div', { className: 'growth-category-title',
+            textContent: getDimensionName(dimId) + ' (' + score + '%)' }));
+
+        for (var m = 0; m < unmet.length; m++) {
+            var badge = unmet[m].rating === 'not_yet' ? '[Not yet]' :
+                unmet[m].rating === 'unknown' ? '[?]' : '[Unrated]';
+            category.appendChild(el('div', { className: 'growth-item' }, [
+                el('span', null, [
+                    el('span', { className: 'growth-badge', textContent: badge + ' ' }),
+                    document.createTextNode(unmet[m].text)
+                ])
+            ]));
+        }
+
+        container.appendChild(category);
+    }
 }
 
 // ===== SAVE & FINISH =====
@@ -838,22 +992,35 @@ function saveAndFinish() {
     var scores = calculateAllScores();
     var assessment = {
         id: generateId(),
+        type: currentAssessment.type,
         profileId: currentAssessment.profileId,
         levelId: currentAssessment.levelId,
         date: new Date().toISOString(),
         scores: scores,
-        ratings: Object.assign({}, currentAssessment.ratings),
-        notes: Object.assign({}, currentAssessment.notes)
+        total: scores.total,
+        ratings: {},
+        comments: {}
     };
 
+    // Copy ratings and comments
+    for (var key in currentAssessment.ratings) {
+        assessment.ratings[key] = currentAssessment.ratings[key];
+    }
+    for (var ckey in currentAssessment.comments) {
+        if (currentAssessment.comments[ckey]) {
+            assessment.comments[ckey] = currentAssessment.comments[ckey];
+        }
+    }
+
     saveAssessment(assessment);
-    saveToLocalStorage('lm_in_progress', null);
+    saveToLocalStorage('lm2_in_progress', null);
 
     currentAssessment = {
+        type: null,
         profileId: null,
         levelId: null,
         ratings: {},
-        notes: {},
+        comments: {},
         startedAt: null
     };
 
@@ -885,34 +1052,64 @@ function renderHistoryList() {
 
     for (var i = history.length - 1; i >= 0; i--) {
         var a = history[i];
-        var profile = MATRIX_DATA.profiles[a.profileId];
-        var level = MATRIX_DATA.levels[a.levelId];
-        var dims = MATRIX_DATA.dimensionOrder;
+        var profileText = '';
+        if (a.type === 'culture') {
+            profileText = 'Culture Score';
+        } else {
+            var profile = MATRIX_DATA.profiles[a.profileId];
+            var level = MATRIX_DATA.levels[a.levelId];
+            profileText = profile.name + ' \u2022 ' + level.name;
+        }
+
+        var dims = a.type === 'culture' ?
+            MATRIX_DATA.cultureScore.cultureDimensionOrder :
+            MATRIX_DATA.dimensionOrder;
 
         var scoresDiv = el('div', { className: 'history-scores' });
         for (var j = 0; j < dims.length; j++) {
             var dimId = dims[j];
-            var abbrev = MATRIX_DATA.dimensions[dimId].name.charAt(0);
+            var dimName;
+            if (a.type === 'culture') {
+                dimName = MATRIX_DATA.cultureScore.dimensions[dimId] ?
+                    MATRIX_DATA.cultureScore.dimensions[dimId].name : 'Master';
+            } else {
+                dimName = MATRIX_DATA.dimensions[dimId].name;
+            }
+            var abbrev = dimName.charAt(0);
             scoresDiv.appendChild(el('span', { className: 'history-score-item' }, [
                 el('span', { className: 'history-score-label', textContent: abbrev + ': ' }),
-                document.createTextNode((a.scores[dimId] || 0).toFixed(1))
+                document.createTextNode((a.scores[dimId] || 0) + '%')
             ]));
         }
+
+        // Total
+        scoresDiv.appendChild(el('span', { className: 'history-score-item history-score-total' }, [
+            el('span', { className: 'history-score-label', textContent: 'Total: ' }),
+            document.createTextNode((a.total || a.scores.total || 0) + '%')
+        ]));
+
+        var typeBadge = el('span', {
+            className: 'history-type-badge ' + (a.type === 'culture' ? 'badge-culture' : 'badge-profile'),
+            textContent: a.type === 'culture' ? 'Culture' : 'Profile'
+        });
 
         var viewBtn = el('button', { className: 'btn-small', textContent: 'View' });
         var compareBtn = el('button', { className: 'btn-small', textContent: 'Compare' });
         var deleteBtn = el('button', { className: 'btn-small', textContent: 'Delete' });
 
-        (function(aid) {
+        (function(aid, atype) {
             viewBtn.addEventListener('click', function() { viewAssessment(aid); });
-            compareBtn.addEventListener('click', function() { toggleCompare(this, aid); });
+            compareBtn.addEventListener('click', function() { toggleCompare(this, aid, atype); });
             deleteBtn.addEventListener('click', function() { deleteAssessment(aid); });
-        })(a.id);
+        })(a.id, a.type);
 
         var item = el('div', { className: 'history-item' }, [
             el('div', { className: 'history-item-header' }, [
-                el('span', { className: 'history-item-date', textContent: formatDate(a.date) }),
-                el('span', { className: 'history-item-profile', textContent: profile.name + ' \u2022 ' + level.name })
+                el('div', null, [
+                    el('span', { className: 'history-item-date', textContent: formatDate(a.date) }),
+                    typeBadge
+                ]),
+                el('span', { className: 'history-item-profile', textContent: profileText })
             ]),
             scoresDiv,
             el('div', { className: 'history-item-actions' }, [viewBtn, compareBtn, deleteBtn])
@@ -930,27 +1127,34 @@ function viewAssessment(assessmentId) {
     }
     if (!assessment) return;
 
+    currentAssessment.type = assessment.type;
     currentAssessment.profileId = assessment.profileId;
     currentAssessment.levelId = assessment.levelId;
     currentAssessment.ratings = assessment.ratings;
-    currentAssessment.notes = assessment.notes;
+    currentAssessment.comments = assessment.comments || {};
 
     goToResults();
 }
 
-function toggleCompare(btn, id) {
+function toggleCompare(btn, id, type) {
     var idx = selectedCompareIds.indexOf(id);
 
     if (idx !== -1) {
         selectedCompareIds.splice(idx, 1);
         btn.classList.remove('active');
+        selectedCompareType = null;
     } else {
+        // Only allow comparing same-type assessments
+        if (selectedCompareIds.length === 1 && selectedCompareType !== type) {
+            return;
+        }
         if (selectedCompareIds.length >= 2) {
             var allBtns = document.querySelectorAll('.btn-small.active');
             if (allBtns.length > 0) allBtns[0].classList.remove('active');
             selectedCompareIds.shift();
         }
         selectedCompareIds.push(id);
+        selectedCompareType = type;
         btn.classList.add('active');
     }
 
@@ -975,8 +1179,17 @@ function showComparison(id1, id2) {
         var tmp = a1; a1 = a2; a2 = tmp;
     }
 
-    var dims = MATRIX_DATA.dimensionOrder;
-    var labels = dims.map(function(d) { return MATRIX_DATA.dimensions[d].name; });
+    var dims = a1.type === 'culture' ?
+        MATRIX_DATA.cultureScore.cultureDimensionOrder :
+        MATRIX_DATA.dimensionOrder;
+
+    var labels = dims.map(function(d) {
+        if (a1.type === 'culture') {
+            return MATRIX_DATA.cultureScore.dimensions[d] ?
+                MATRIX_DATA.cultureScore.dimensions[d].name : 'Master';
+        }
+        return MATRIX_DATA.dimensions[d].name;
+    });
     var data1 = dims.map(function(d) { return a1.scores[d] || 0; });
     var data2 = dims.map(function(d) { return a2.scores[d] || 0; });
 
@@ -1011,8 +1224,8 @@ function showComparison(id1, id2) {
             responsive: true,
             scales: {
                 r: {
-                    min: 0, max: 5,
-                    ticks: { stepSize: 1, font: { size: 10 } },
+                    min: 0, max: 100,
+                    ticks: { stepSize: 25, font: { size: 10 }, callback: function(v) { return v + '%'; } },
                     pointLabels: { font: { size: 12, weight: '600' } },
                     grid: { color: 'rgba(0,0,0,0.06)' }
                 }
@@ -1029,14 +1242,14 @@ function showComparison(id1, id2) {
 
     for (var j = 0; j < dims.length; j++) {
         var dimId = dims[j];
-        var dim = MATRIX_DATA.dimensions[dimId];
+        var dimName = labels[j];
         var delta = (a2.scores[dimId] || 0) - (a1.scores[dimId] || 0);
         var sign = delta > 0 ? '+' : '';
-        var cls = delta > 0.05 ? 'positive' : (delta < -0.05 ? 'negative' : 'neutral');
+        var cls = delta > 0 ? 'positive' : (delta < 0 ? 'negative' : 'neutral');
 
         deltaContainer.appendChild(el('div', { className: 'delta-card' }, [
-            el('div', { className: 'delta-label', textContent: dim.name }),
-            el('div', { className: 'delta-value ' + cls, textContent: sign + delta.toFixed(1) })
+            el('div', { className: 'delta-label', textContent: dimName }),
+            el('div', { className: 'delta-value ' + cls, textContent: sign + delta + '%' })
         ]));
     }
 
@@ -1046,6 +1259,7 @@ function showComparison(id1, id2) {
 function closeComparison() {
     document.getElementById('comparison-section').classList.add('hidden');
     selectedCompareIds = [];
+    selectedCompareType = null;
     document.querySelectorAll('.btn-small.active').forEach(function(btn) {
         btn.classList.remove('active');
     });
@@ -1055,7 +1269,7 @@ function deleteAssessment(assessmentId) {
     if (!confirm('Delete this assessment? This cannot be undone.')) return;
     var history = loadHistory();
     history = history.filter(function(a) { return a.id !== assessmentId; });
-    saveToLocalStorage('lm_history', history);
+    saveToLocalStorage('lm2_history', history);
     renderHistoryList();
 }
 
@@ -1086,15 +1300,15 @@ function loadFromLocalStorage(key) {
 function saveAssessment(assessment) {
     var history = loadHistory();
     history.push(assessment);
-    saveToLocalStorage('lm_history', history);
+    saveToLocalStorage('lm2_history', history);
 }
 
 function loadHistory() {
-    return loadFromLocalStorage('lm_history') || [];
+    return loadFromLocalStorage('lm2_history') || [];
 }
 
 function saveInProgressAssessment() {
-    saveToLocalStorage('lm_in_progress', currentAssessment);
+    saveToLocalStorage('lm2_in_progress', currentAssessment);
 }
 
 // ===== UTILITIES =====
@@ -1110,315 +1324,4 @@ function formatDate(isoString) {
     var d = new Date(isoString);
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-}
-
-// ===== EVIDENCE JOURNAL =====
-var journalProfileId = null;
-var journalLevelId = null;
-var journalExpandedDims = {};
-
-function loadEvidence() {
-    return loadFromLocalStorage('lm_evidence') || {};
-}
-
-function saveEvidence(evidence) {
-    saveToLocalStorage('lm_evidence', evidence);
-}
-
-function getEvidenceKey(profileId, levelId, dimId, stmtIndex) {
-    return profileId + '_' + levelId + '_' + dimId + '_' + stmtIndex;
-}
-
-function getEvidenceForStatement(profileId, levelId, dimId, stmtIndex) {
-    var evidence = loadEvidence();
-    var key = getEvidenceKey(profileId, levelId, dimId, stmtIndex);
-    return evidence[key] || [];
-}
-
-function countEvidenceForDimension(profileId, levelId, dimId) {
-    var evidence = loadEvidence();
-    var statements = getStatements(profileId, levelId, dimId);
-    var count = 0;
-    for (var i = 0; i < statements.length; i++) {
-        var key = getEvidenceKey(profileId, levelId, dimId, i);
-        if (evidence[key] && evidence[key].length > 0) count += evidence[key].length;
-    }
-    return count;
-}
-
-function goToJournal() {
-    // Default to last used profile/level or first available
-    var lastProfile = loadFromLocalStorage('lm_profile');
-    var lastLevel = loadFromLocalStorage('lm_level');
-
-    journalProfileId = lastProfile || Object.keys(MATRIX_DATA.profiles)[0];
-    journalLevelId = lastLevel;
-
-    renderJournalPicker();
-    renderJournalDimensions();
-    showScreen('screen-journal');
-}
-
-function renderJournalPicker() {
-    var profileSelect = document.getElementById('journal-profile-select');
-    clearElement(profileSelect);
-
-    var profileIds = Object.keys(MATRIX_DATA.profiles);
-    for (var i = 0; i < profileIds.length; i++) {
-        var pid = profileIds[i];
-        var p = MATRIX_DATA.profiles[pid];
-        var opt = el('option', { value: pid, textContent: p.icon + ' ' + p.name });
-        if (pid === journalProfileId) opt.selected = true;
-        profileSelect.appendChild(opt);
-    }
-
-    renderJournalLevelOptions();
-}
-
-function renderJournalLevelOptions() {
-    var levelSelect = document.getElementById('journal-level-select');
-    clearElement(levelSelect);
-
-    var profile = MATRIX_DATA.profiles[journalProfileId];
-    var available = profile.availableLevels;
-
-    // If current level not available for this profile, pick first
-    if (available.indexOf(journalLevelId) === -1) {
-        journalLevelId = available[0];
-    }
-
-    for (var i = 0; i < available.length; i++) {
-        var lid = available[i];
-        var level = MATRIX_DATA.levels[lid];
-        var opt = el('option', { value: lid, textContent: level.name });
-        if (lid === journalLevelId) opt.selected = true;
-        levelSelect.appendChild(opt);
-    }
-}
-
-function onJournalProfileChange() {
-    journalProfileId = document.getElementById('journal-profile-select').value;
-    renderJournalLevelOptions();
-    renderJournalDimensions();
-}
-
-function onJournalLevelChange() {
-    journalLevelId = document.getElementById('journal-level-select').value;
-    renderJournalDimensions();
-}
-
-function renderJournalDimensions() {
-    var container = document.getElementById('journal-dimensions');
-    clearElement(container);
-
-    if (!journalProfileId || !journalLevelId) return;
-
-    var dims = MATRIX_DATA.dimensionOrder;
-    for (var i = 0; i < dims.length; i++) {
-        var dimId = dims[i];
-        var dim = MATRIX_DATA.dimensions[dimId];
-        var evidenceCount = countEvidenceForDimension(journalProfileId, journalLevelId, dimId);
-        var isExpanded = journalExpandedDims[dimId] || false;
-
-        var badge = el('span', {
-            className: 'journal-dim-badge' + (evidenceCount === 0 ? ' empty' : ''),
-            textContent: evidenceCount + ' example' + (evidenceCount !== 1 ? 's' : '')
-        });
-
-        var header = el('div', {
-            className: 'journal-dim-header',
-            style: { borderLeftColor: dim.color }
-        }, [
-            el('span', { className: 'journal-dim-title', textContent: dim.name, style: { color: dim.color } }),
-            badge
-        ]);
-
-        var body = el('div', { className: 'journal-dim-body' + (isExpanded ? '' : ' collapsed') });
-        renderJournalStatements(body, dimId);
-
-        (function(did) {
-            header.addEventListener('click', function() {
-                journalExpandedDims[did] = !journalExpandedDims[did];
-                renderJournalDimensions();
-            });
-        })(dimId);
-
-        var section = el('div', { className: 'journal-dim-section' }, [header, body]);
-        container.appendChild(section);
-    }
-}
-
-function renderJournalStatements(container, dimId) {
-    var statements = getStatements(journalProfileId, journalLevelId, dimId);
-
-    for (var i = 0; i < statements.length; i++) {
-        var stmtDiv = el('div', { className: 'journal-statement' });
-        stmtDiv.appendChild(el('p', { className: 'journal-statement-text', textContent: '\u201C' + statements[i] + '\u201D' }));
-
-        // Existing examples
-        var examples = getEvidenceForStatement(journalProfileId, journalLevelId, dimId, i);
-        if (examples.length > 0) {
-            var examplesDiv = el('div', { className: 'journal-examples' });
-            for (var j = 0; j < examples.length; j++) {
-                examplesDiv.appendChild(renderJournalExample(dimId, i, j, examples[j]));
-            }
-            stmtDiv.appendChild(examplesDiv);
-        }
-
-        // Add button / form
-        stmtDiv.appendChild(renderJournalAddButton(dimId, i));
-
-        container.appendChild(stmtDiv);
-    }
-}
-
-function renderJournalExample(dimId, stmtIndex, exampleIndex, example) {
-    var actionsDiv = el('div', { className: 'journal-example-actions' });
-
-    var editBtn = el('button', { textContent: 'Edit' });
-    var deleteBtn = el('button', { className: 'delete', textContent: 'Delete' });
-
-    (function(did, si, ei) {
-        editBtn.addEventListener('click', function() { editJournalExample(did, si, ei); });
-        deleteBtn.addEventListener('click', function() { deleteJournalExample(did, si, ei); });
-    })(dimId, stmtIndex, exampleIndex);
-
-    actionsDiv.appendChild(editBtn);
-    actionsDiv.appendChild(deleteBtn);
-
-    return el('div', {
-        className: 'journal-example',
-        'data-dim': dimId,
-        'data-stmt': String(stmtIndex),
-        'data-example': String(exampleIndex)
-    }, [
-        el('div', { className: 'journal-example-date', textContent: formatDate(example.date) }),
-        el('div', { className: 'journal-example-text', textContent: example.text }),
-        actionsDiv
-    ]);
-}
-
-function renderJournalAddButton(dimId, stmtIndex) {
-    var btn = el('button', { className: 'journal-add-btn', textContent: '+ Add example' });
-    (function(did, si) {
-        btn.addEventListener('click', function() {
-            var parent = this.parentNode;
-            parent.replaceChild(renderJournalAddForm(did, si), this);
-        });
-    })(dimId, stmtIndex);
-    return btn;
-}
-
-function renderJournalAddForm(dimId, stmtIndex) {
-    var form = el('div', { className: 'journal-add-form' });
-    var textarea = el('textarea', {
-        placeholder: 'Describe a concrete example from your work...',
-        rows: '3'
-    });
-
-    var saveBtn = el('button', { className: 'btn-save', textContent: 'Save' });
-    var cancelBtn = el('button', { className: 'btn-cancel', textContent: 'Cancel' });
-
-    (function(did, si) {
-        saveBtn.addEventListener('click', function() {
-            var text = textarea.value.trim();
-            if (!text) return;
-            addJournalExample(did, si, text);
-        });
-        cancelBtn.addEventListener('click', function() {
-            renderJournalDimensions();
-        });
-    })(dimId, stmtIndex);
-
-    var actions = el('div', { className: 'journal-add-form-actions' }, [cancelBtn, saveBtn]);
-    form.appendChild(textarea);
-    form.appendChild(actions);
-
-    // Auto-focus
-    setTimeout(function() { textarea.focus(); }, 50);
-
-    return form;
-}
-
-function addJournalExample(dimId, stmtIndex, text) {
-    var evidence = loadEvidence();
-    var key = getEvidenceKey(journalProfileId, journalLevelId, dimId, stmtIndex);
-    if (!evidence[key]) evidence[key] = [];
-    var newIndex = evidence[key].length;
-    evidence[key].push({
-        id: generateId(),
-        date: new Date().toISOString(),
-        text: text
-    });
-    saveEvidence(evidence);
-    renderJournalDimensions();
-    flashJournalExample(dimId, stmtIndex, newIndex);
-}
-
-function editJournalExample(dimId, stmtIndex, exampleIndex) {
-    var evidence = loadEvidence();
-    var key = getEvidenceKey(journalProfileId, journalLevelId, dimId, stmtIndex);
-    var examples = evidence[key] || [];
-    var example = examples[exampleIndex];
-    if (!example) return;
-
-    // Re-render dimensions with this dimension expanded
-    journalExpandedDims[dimId] = true;
-    renderJournalDimensions();
-
-    // Find the example by data attributes
-    var selector = '.journal-example[data-dim="' + dimId + '"][data-stmt="' + stmtIndex + '"][data-example="' + exampleIndex + '"]';
-    var exampleDiv = document.querySelector(selector);
-    if (!exampleDiv) return;
-
-    var form = el('div', { className: 'journal-add-form' });
-    var textarea = el('textarea', { rows: '3' });
-    textarea.value = example.text;
-
-    var saveBtn = el('button', { className: 'btn-save', textContent: 'Save' });
-    var cancelBtn = el('button', { className: 'btn-cancel', textContent: 'Cancel' });
-
-    (function(did, si, ei) {
-        saveBtn.addEventListener('click', function() {
-            var text = textarea.value.trim();
-            if (!text) return;
-            var ev = loadEvidence();
-            var k = getEvidenceKey(journalProfileId, journalLevelId, did, si);
-            if (ev[k] && ev[k][ei]) {
-                ev[k][ei].text = text;
-                ev[k][ei].date = new Date().toISOString();
-                saveEvidence(ev);
-            }
-            renderJournalDimensions();
-            flashJournalExample(did, si, ei);
-        });
-        cancelBtn.addEventListener('click', function() {
-            renderJournalDimensions();
-        });
-    })(dimId, stmtIndex, exampleIndex);
-
-    var actions = el('div', { className: 'journal-add-form-actions' }, [cancelBtn, saveBtn]);
-    form.appendChild(textarea);
-    form.appendChild(actions);
-
-    exampleDiv.parentNode.replaceChild(form, exampleDiv);
-    setTimeout(function() { textarea.focus(); }, 50);
-}
-
-function deleteJournalExample(dimId, stmtIndex, exampleIndex) {
-    if (!confirm('Delete this example?')) return;
-    var evidence = loadEvidence();
-    var key = getEvidenceKey(journalProfileId, journalLevelId, dimId, stmtIndex);
-    if (evidence[key]) {
-        evidence[key].splice(exampleIndex, 1);
-        if (evidence[key].length === 0) delete evidence[key];
-        saveEvidence(evidence);
-    }
-    renderJournalDimensions();
-}
-
-function flashJournalExample(dimId, stmtIndex, exampleIndex) {
-    var selector = '.journal-example[data-dim="' + dimId + '"][data-stmt="' + stmtIndex + '"][data-example="' + exampleIndex + '"]';
-    var node = document.querySelector(selector);
-    if (node) node.classList.add('just-saved');
 }
