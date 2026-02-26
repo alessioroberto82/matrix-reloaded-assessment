@@ -1,48 +1,49 @@
 # Matrix Reloaded Assessment
 
-A self-assessment tool for role-based growth frameworks. Rate yourself on behavioral statements across four learning dimensions, visualize your scores, track progress over time, and collect evidence examples for your assessment conversations.
+A self-assessment tool for Luscii's Matrix Reloaded role-based growth framework. Rate yourself on behavioral statements using Yes / Not yet / ?, visualize your scores, track progress over time, and collect evidence notes inline with each statement.
 
 Built as a vanilla HTML/CSS/JS app. No build step, no dependencies (except Chart.js via CDN). Open `index.html` to run.
 
 ## Features
 
 - **Profile & level selection** — Choose your role profile and growth level
-- **Self-assessment** — Rate behavioral statements (1-5) across 4 dimensions: Mastery, Autonomy, Impact, Ownership
-- **Radar chart visualization** — See your scores at a glance with a baseline comparison
-- **Narrative summary** — Auto-generated text highlighting strengths, growth areas, and level readiness
+- **Profile assessment** — Rate behavioral statements (Yes / Not yet / ?) across 4 dimensions: Mastery, Autonomy, Impact, Ownership
+- **Culture Score assessment** — Separate assessment for 5 culture dimensions + master statements
+- **Inline comments** — Add notes and evidence per statement (replaces the old Evidence Journal)
+- **Radar chart visualization** — See your scores at a glance with a 100% baseline comparison
+- **Narrative summary** — Auto-generated text highlighting strengths, growth areas, and comments
 - **Growth suggestions** — Actionable suggestions calibrated to your scores
-- **Assessment history** — Save and compare assessments over time
-- **Evidence Journal** — Collect concrete work examples for each behavioral statement, accessible anytime (not just during assessment)
+- **Assessment history** — Save, review (with comments), and compare assessments over time
 
 ## Setup
 
 1. Clone this repository
-2. Copy `matrix-data.example.js` to `matrix-data.js`
-3. Populate `matrix-data.js` with your organisation's profiles, behavioral statements, and growth suggestions (see the example file for the expected structure)
-4. Open `index.html` in any browser
+2. Open `index.html` in any browser
 
 No server required. For development with live reload: `python3 -m http.server 8000`
 
+All data stays in the browser (localStorage). Nothing is sent to any server.
+
 ## Data structure
 
-The app expects a `matrix-data.js` file (not included — see `matrix-data.example.js`) containing:
+The app uses `matrix-data.js` containing:
 
-| Section | Key format | Description |
-|---------|-----------|-------------|
-| `profiles` | `{profileId}` | Role profiles with metadata |
-| `levels` | `junior`, `medior`, `core`, `master` | Growth level definitions |
-| `dimensions` | `mastery`, `autonomy`, `impact`, `ownership` | Learning dimensions |
-| `statements` | `{profileId}_{levelId}_{dimensionId}` | Arrays of 4 behavioral "I" statements |
-| `growthSuggestions` | `{profileId}_{dimensionId}_{low\|medium\|high}` | Arrays of 2 suggestions per score range |
-| `scoreLabels` | `strong`, `solid`, `developing`, `emerging` | Score interpretation thresholds |
-| `levelExpectations` | `{levelId}` | Narrative text per level |
-| `progressionTimeline` | `{profileId}` | Typical years per level |
+| Section | Description |
+|---------|-------------|
+| `profiles` | 8 role profiles with metadata (expert, connector, navigator, etc.) |
+| `levels` | 4 growth levels: junior, medior, core, master |
+| `dimensions` | 4 learning dimensions: mastery, autonomy, impact, ownership |
+| `statements` | Behavioral statements keyed as `{profileId}_{levelId}_{dimensionId}` |
+| `cultureScore` | 5 culture dimensions × 3 statements + 5 master statements |
+| `growthSuggestions` | Suggestions per dimension and score range |
+| `scoreLabels` | Score interpretation thresholds (strong, developing, emerging) |
+| `levelExpectations` | Narrative text per level |
 
-All data stays in the browser (localStorage). Nothing is sent to any server.
+Source of truth: the official Luscii Matrix Reloaded Excel assessment.
 
 ## For Luscii colleagues
 
-This tool implements the [Matrix Reloaded](https://www.notion.so/luscii/) framework. Ask your team lead for the `matrix-data.js` file with Luscii's behavioral statements and growth suggestions.
+This tool implements the [Matrix Reloaded](https://www.notion.so/luscii/) framework. The behavioral statements match the official Excel assessment exactly.
 
 ## How it was built
 
